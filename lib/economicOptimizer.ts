@@ -1,6 +1,6 @@
 import { readDB, updateDB } from "./store";
 import type { Opportunity, Lead, Deal } from "./types";
-import { economicContext, rebuildEconomicPriors } from "./economicLearning";
+import { rebuildEconomicPriors } from "./economicLearning";
 
 export interface EconomicModel {
   opportunityId:string; businessName:string; expectedDealValue:number; winProbability:number;
@@ -24,7 +24,8 @@ function estimateWinProbability(db:Awaited<ReturnType<typeof readDB>>,o:Opportun
   const historical=db.opportunities.filter(x=>x.category.toLowerCase()===o.category.toLowerCase());
   const won=historical.filter(x=>db.deals.some(d=>d.opportunityId===x.id&&d.status==="won")).length;
   const resolved=historical.filter(x=>x.status==="won"||x.status==="lost"||db.deals.some(d=>d.opportunityId===x.id&&(d.status==="won"||d.status==="lost"))).length;
-  const learned=learnedPrior(db,o);\n  const empirical=learned&&learned.observations>=5?learned.winProbability:(resolved>=5?won/resolved:0.12);
+  const learned=learnedPrior(db,o);
+  const empirical=learned&&learned.observations>=5?learned.winProbability:(resolved>=5?won/resolved:0.12);
   const scorePrior=Math.max(.02,Math.min(.45,o.score/100*.35));
   const contactPrior=o.contactEmail?0.08:0;
   const phonePrior=o.phone?0.03:0;
@@ -44,9 +45,11 @@ function estimateDays(o:Opportunity,leads:Lead[],deals:Deal[]){
 
 export async function scoreOpportunity(opportunityId:string):Promise<EconomicModel>{
   const db=await readDB(),o=db.opportunities.find(x=>x.id===opportunityId);if(!o)throw new Error("Opportunity not found");
-  await rebuildEconomicPriors();\n  const refreshed=await readDB(),expectedDealValue=estimateDealValue(refreshed,o),winProbability=estimateWinProbability(refreshed,o);
+  await rebuildEconomicPriors();
+  const refreshed=await readDB(),expectedDealValue=estimateDealValue(refreshed,o),winProbability=estimateWinProbability(refreshed,o);
   const leads=db.leads.filter(l=>l.opportunityId===o.id),deals=db.deals.filter(d=>d.opportunityId===o.id);
-  const learned=learnedPrior(refreshed,o);\n  const acquisitionCost=(learned&&learned.observations>=5?learned.avgAcquisitionCost:(o.contactEmail?envNumber("NORTHSTAR_OUTREACH_COST_USD",.25):envNumber("NORTHSTAR_DISCOVERY_COST_USD",.10))+(leads.length*envNumber("NORTHSTAR_FOLLOWUP_COST_USD",.10)))+0;
+  const learned=learnedPrior(refreshed,o);
+  const acquisitionCost=(learned&&learned.observations>=5?learned.avgAcquisitionCost:(o.contactEmail?envNumber("NORTHSTAR_OUTREACH_COST_USD",.25):envNumber("NORTHSTAR_DISCOVERY_COST_USD",.10))+(leads.length*envNumber("NORTHSTAR_FOLLOWUP_COST_USD",.10)))+0;
   const executionCost=learned&&learned.observations>=5?learned.avgExecutionCost:envNumber("NORTHSTAR_AI_ACTION_COST_USD",.75)+envNumber("NORTHSTAR_TOOL_COST_USD",.25)+(o.contactEmail?envNumber("NORTHSTAR_BUILD_COST_USD",.50):envNumber("NORTHSTAR_BUILD_COST_USD",.75));
   const riskPenalty=expectedDealValue*(1-winProbability)*envNumber("NORTHSTAR_RISK_RATE",.08);
   const expectedRevenue=winProbability*expectedDealValue,expectedValue=expectedRevenue-acquisitionCost-executionCost-riskPenalty;

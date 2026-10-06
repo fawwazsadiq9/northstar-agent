@@ -12,7 +12,7 @@ export interface Opportunity { id:string; businessName:string; website?:string; 
 export interface Lead { id:string; opportunityId:string; name:string; email?:string; phone?:string; message?:string; status:LeadStatus; source:string; lastContactedAt?:string; nextFollowUpAt?:string; createdAt:string; }
 export interface Asset { id:string; opportunityId:string; type:"website"|"offer"|"email"|"lead_response"; title:string; content:string; status:AssetStatus; deploymentUrl?:string; createdAt:string; }
 export interface RevenueEvent { id:string; opportunityId?:string; leadId?:string; dealId?:string; type:"pipeline"|"won"|"lost"|"payment"; amount:number; currency:string; note:string; createdAt:string; }
-export interface LeadResponse { id:string; leadId:string; content:string; channel:string; status:"draft"|"approved"|"sent"; createdAt:string; }
+export interface LeadResponse { id:string; leadId:string; content:string; channel:string; status:"draft"|"approved"|"sent"; kind?:"initial"|"follow_up"; createdAt:string; }
 export interface Appointment { id:string; leadId:string; opportunityId:string; startsAt:string; endsAt?:string; status:AppointmentStatus; notes?:string; createdAt:string; }
 export interface Deal { id:string; opportunityId:string; leadId?:string; value:number; currency:string; status:DealStatus; closedAt?:string; createdAt:string; }
 export interface Attribution { id:string; dealId:string; leadId:string; opportunityId:string; revenueAmount:number; currency:string; source:string; confidence:number; createdAt:string; }

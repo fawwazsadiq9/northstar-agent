@@ -40,6 +40,9 @@ export interface Opportunity {
   sourceId?: string;
   phone?: string;
   contactEmail?: string;
+  websiteVerified?: boolean;
+  websiteStatus?: number;
+  websiteTitle?: string;
   createdAt: string;
 }
 

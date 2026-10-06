@@ -1,5 +1,6 @@
 import type { Opportunity } from "./types";
 import { id } from "./id";
+import { verifyWebsite } from "./websiteVerifier";
 
 type DiscoveryInput = { location: string; category?: string; limit?: number };
 type Place = { lat: string; lon: string; display_name: string };
@@ -89,5 +90,18 @@ export async function discoverOpportunities(input: DiscoveryInput): Promise<Oppo
       createdAt: new Date().toISOString()
     });
   }
-  return results.sort((a,b) => b.score - a.score).slice(0, limit);
+  const candidates = results.sort((a,b) => b.score - a.score).slice(0, limit);
+  const verified = await Promise.all(candidates.map(async opportunity => {
+    const check = await verifyWebsite(opportunity);
+    const signals = [...opportunity.signals];
+    let score = opportunity.score;
+    if (opportunity.website && check.websiteVerified === false) {
+      score = Math.min(99, score + 12);
+      signals.push("Listed website could not be reached");
+    } else if (opportunity.website && check.websiteVerified) {
+      signals.push("Listed website verified reachable");
+    }
+    return { ...opportunity, ...check, score, signals };
+  }));
+  return verified.sort((a,b) => b.score - a.score);
 }

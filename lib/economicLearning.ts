@@ -16,6 +16,8 @@ export interface EconomicPrior {
 type EconomicLearningDB=Awaited<ReturnType<typeof readDB>> & {
   economicObservations?:EconomicObservation[];
   economicPriors?:EconomicPrior[];
+  strategyObservations?:Array<{variantId:string;opportunityId?:string;leadId?:string;outcome:"pending"|"won"|"lost"|"failed";revenue:number}>;
+  strategyVariants?:Array<{id:string;name:string}>;
 };
 
 const uid=(prefix:string)=>prefix+"_"+crypto.randomUUID();

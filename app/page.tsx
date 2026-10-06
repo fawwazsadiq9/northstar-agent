@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 type Mission = { id:string; objective:string; status:string; progress:number; currentStage:string; updatedAt:string };
-type Opportunity = { id:string; businessName:string; website?:string; deployedWebsiteUrl?:string; category:string; location:string; score:number; status:string };
+type Opportunity = { id:string; businessName:string; website?:string; deployedWebsiteUrl?:string; category:string; location:string; score:number; status:string; contactEmail?:string };
 type Asset = { id:string; opportunityId:string; type:"website"|"offer"|"email"; title:string; content:string; status:"draft"|"ready"|"published"; deploymentUrl?:string; createdAt:string };\ntype RevenueAudit = { opportunityId:string; businessName:string; score:number; confidence:number; modeledMonthlyOpportunities:{low:number;high:number}; modeledAnnualRevenue:{low:number;high:number}; assumedDealValue:number; gaps:string[]; actions:string[]; disclaimer:string };
 
 const pillars = [
@@ -19,7 +19,7 @@ export default function Home() {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [busyAsset, setBusyAsset] = useState("");
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");\n  const [audits, setAudits] = useState<Record<string, RevenueAudit>>({});\n  const [busyAudit, setBusyAudit] = useState("");
+  const [notice, setNotice] = useState("");\n  const [audits, setAudits] = useState<Record<string, RevenueAudit>>({});\n  const [busyAudit, setBusyAudit] = useState("");\n  const [busyOutreach, setBusyOutreach] = useState("");
 
   async function refresh() {
     const [m,o,a] = await Promise.all([
@@ -44,7 +44,22 @@ export default function Home() {
     finally { setRunning(false); }
   }
 
-  async function runRevenueAudit(opportunityId: string) {\n    setBusyAudit(opportunityId); setError(""); setNotice("");\n    try {\n      const res = await fetch(`/api/revenue-audits?opportunityId=${encodeURIComponent(opportunityId)}`, {cache:"no-store"});\n      const data = await res.json().catch(() => ({}));\n      if (!res.ok) throw new Error(data.error || "Revenue audit failed");\n      setAudits(current => ({...current, [opportunityId]: data}));\n    } catch (e) { setError(e instanceof Error ? e.message : "Revenue audit failed"); }\n    finally { setBusyAudit(""); }\n  }\n\n  async function approveAndDeploy(asset: Asset) {
+  async function runRevenueAudit(opportunityId: string) {\n    setBusyAudit(opportunityId); setError(""); setNotice("");\n    try {\n      const res = await fetch(`/api/revenue-audits?opportunityId=${encodeURIComponent(opportunityId)}`, {cache:"no-store"});\n      const data = await res.json().catch(() => ({}));\n      if (!res.ok) throw new Error(data.error || "Revenue audit failed");\n      setAudits(current => ({...current, [opportunityId]: data}));\n    } catch (e) { setError(e instanceof Error ? e.message : "Revenue audit failed"); }\n    finally { setBusyAudit(""); }\n  }\n\n  async function approveAndSend(asset: Asset) {
+    setBusyOutreach(asset.id); setError(""); setNotice("");
+    try {
+      const approval = await fetch("/api/approvals", {method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({assetId:asset.id,action:"send_email"})});
+      const approved = await approval.json().catch(() => ({}));
+      if (!approval.ok) throw new Error(approved.error || "Approval failed");
+      const send = await fetch("/api/outreach/send", {method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({assetId:asset.id})});
+      const result = await send.json().catch(() => ({}));
+      if (!send.ok) throw new Error(result.error || "Outbound send failed");
+      setNotice("Approved outreach sent successfully.");
+      await refresh();
+    } catch (e) { setError(e instanceof Error ? e.message : "Outbound send failed"); await refresh().catch(() => {}); }
+    finally { setBusyOutreach(""); }
+  }
+
+  async function approveAndDeploy(asset: Asset) {
     if (asset.status === "published" && asset.deploymentUrl) return;
     setBusyAsset(asset.id); setError(""); setNotice("");
     try {
@@ -70,7 +85,7 @@ export default function Home() {
 
   useEffect(() => { refresh().catch(() => {}); }, []);
 
-  const websiteAssets = useMemo(() => {
+  const emailAssets = useMemo(() => {\n    const map = new Map<string, Asset>();\n    for (const asset of assets) if (asset.type === "email") {\n      const existing = map.get(asset.opportunityId);\n      if (!existing || new Date(asset.createdAt).getTime() > new Date(existing.createdAt).getTime()) map.set(asset.opportunityId, asset);\n    }\n    return map;\n  }, [assets]);\n\n  const websiteAssets = useMemo(() => {
     const map = new Map<string, Asset>();
     for (const asset of assets) if (asset.type === "website") {
       const existing = map.get(asset.opportunityId);
@@ -135,7 +150,16 @@ export default function Home() {
             <div className="score">{o.score}</div>
             <div className="opportunity-main">
               <strong>{o.businessName}</strong><span>{o.category} · {o.location}</span>
-              <div className="audit-workspace">\n                <div>\n                  <small className="workspace-label">REVENUE AUDIT</small>\n                  <b>{audits[o.id] ? `MODELED ${Math.round(audits[o.id].modeledAnnualRevenue.low / 1000)}K–${Math.round(audits[o.id].modeledAnnualRevenue.high / 1000)}K / YEAR` : "NOT YET MODELED"}</b>\n                </div>\n                <button className="audit-button" onClick={() => runRevenueAudit(o.id)} disabled={busyAudit === o.id}>\n                  {busyAudit === o.id ? "ANALYZING…" : audits[o.id] ? "REFRESH AUDIT" : "RUN REVENUE AUDIT"}\n                </button>\n              </div>\n              {audits[o.id] && <div className="audit-result"><span>{audits[o.id].confidence}% confidence</span><span>{audits[o.id].modeledMonthlyOpportunities.low}–{audits[o.id].modeledMonthlyOpportunities.high} modeled opportunities/mo</span><span>Assumed deal value ${audits[o.id].assumedDealValue.toLocaleString()}</span></div>}\n              <div className="website-workspace">
+              <div className="audit-workspace">\n                <div>\n                  <small className="workspace-label">REVENUE AUDIT</small>\n                  <b>{audits[o.id] ? `MODELED ${Math.round(audits[o.id].modeledAnnualRevenue.low / 1000)}K–${Math.round(audits[o.id].modeledAnnualRevenue.high / 1000)}K / YEAR` : "NOT YET MODELED"}</b>\n                </div>\n                <button className="audit-button" onClick={() => runRevenueAudit(o.id)} disabled={busyAudit === o.id}>\n                  {busyAudit === o.id ? "ANALYZING…" : audits[o.id] ? "REFRESH AUDIT" : "RUN REVENUE AUDIT"}\n                </button>\n              </div>\n              {audits[o.id] && <div className="audit-result"><span>{audits[o.id].confidence}% confidence</span><span>{audits[o.id].modeledMonthlyOpportunities.low}–{audits[o.id].modeledMonthlyOpportunities.high} modeled opportunities/mo</span><span>Assumed deal value ${audits[o.id].assumedDealValue.toLocaleString()}</span></div>}\n              <div className="audit-workspace">
+                <div>
+                  <small className="workspace-label">OUTBOUND</small>
+                  <b>{emailAssets.get(o.id) ? (emailAssets.get(o.id)?.status === "published" ? "OUTREACH SENT" : "OUTREACH READY") : "NO OUTREACH DRAFT"}</b>
+                </div>
+                {emailAssets.get(o.id) ? <button className="audit-button" onClick={() => approveAndSend(emailAssets.get(o.id)!)} disabled={busyOutreach === emailAssets.get(o.id)!.id}>
+                  {busyOutreach === emailAssets.get(o.id)!.id ? "SENDING…" : emailAssets.get(o.id)!.status === "published" ? "SENT" : "APPROVE & SEND"}
+                </button> : <span className="workspace-muted">{o.contactEmail ? "AI draft will be prepared when configured" : "No public contact email"}</span>}
+              </div>
+              <div className="website-workspace">
                 <div>
                   <small className="workspace-label">WEBSITE WORKSPACE</small>
                   <b>{liveUrl ? "LIVE ON VERCEL" : asset ? "WEBSITE ASSET READY" : "NO WEBSITE ASSET"}</b>

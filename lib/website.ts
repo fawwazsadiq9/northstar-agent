@@ -1,0 +1,9 @@
+import type { Opportunity } from "./types";
+
+export function fallbackWebsite(opportunity: Opportunity) {
+  const safe = (value: string) => value.replace(/[&<>"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]!));
+  const name = safe(opportunity.businessName);
+  const category = safe(opportunity.category);
+  const location = safe(opportunity.location);
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${name} — ${category}</title><style>body{margin:0;font-family:system-ui;background:#090b10;color:#f7f7f7}main{max-width:980px;margin:auto;padding:80px 24px}h1{font-size:clamp(48px,8vw,86px);line-height:.95;letter-spacing:-.06em}p{color:#a7adb8;font-size:19px;line-height:1.6}.cta{display:inline-block;background:#fff;color:#08090b;padding:16px 22px;text-decoration:none;font-weight:800;border-radius:4px}.card{margin-top:80px;border:1px solid #272b33;padding:28px}</style></head><body><main><small>${location} · ${category}</small><h1>${name}</h1><p>A clearer way to turn high-intent inquiries into conversations. Get in touch to discuss your needs.</p><a class="cta" href="#contact">Request a consultation →</a><div class="card" id="contact"><h2>Start a conversation</h2><p>Tell us what you need and our team will respond.</p><form><input required placeholder="Name"><br><br><input required type="email" placeholder="Email"><br><br><textarea placeholder="How can we help?"></textarea><br><br><button class="cta" type="submit">Send inquiry</button></form></div></main></body></html>`;
+}

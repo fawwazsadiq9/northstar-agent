@@ -1,4 +1,4 @@
-import { updateDB } from "./store";
+import { updateDB, readDB } from "./store";
 import { id } from "./id";
 import { discoverOpportunities } from "./discovery";
 import type { Mission } from "./types";
@@ -20,27 +20,32 @@ export async function createMission(objective: string): Promise<Mission> {
 }
 
 export async function runMission(missionId: string) {
-  const opportunities = await discoverOpportunities({ location: discoveryLocation((await import("./store")).readDB().then ? "" : "") });
+  const current = await readDB();
+  const mission = current.missions.find(m => m.id === missionId);
+  if (!mission) throw new Error("Mission not found");
+
+  const opportunities = await discoverOpportunities({ location: discoveryLocation(mission.objective), limit: 10 });
+
   return updateDB(async db => {
-    const mission = db.missions.find(m => m.id === missionId);
-    if (!mission) throw new Error("Mission not found");
-    mission.status = "running";
-    mission.updatedAt = new Date().toISOString();
+    const target = db.missions.find(m => m.id === missionId);
+    if (!target) throw new Error("Mission not found");
+    target.status = "running";
+    target.updatedAt = new Date().toISOString();
 
     const existing = new Set(db.opportunities.map(o => o.sourceId).filter(Boolean));
     const fresh = opportunities.filter(o => !o.sourceId || !existing.has(o.sourceId));
     db.opportunities.unshift(...fresh);
 
     for (let i = 0; i < stages.length; i++) {
-      mission.currentStage = stages[i];
-      mission.progress = Math.round(((i + 1) / stages.length) * 100);
-      mission.updatedAt = new Date().toISOString();
+      target.currentStage = stages[i];
+      target.progress = Math.round(((i + 1) / stages.length) * 100);
+      target.updatedAt = new Date().toISOString();
     }
 
-    mission.status = "completed";
-    mission.currentStage = "complete";
-    mission.progress = 100;
-    mission.updatedAt = new Date().toISOString();
-    return mission;
+    target.status = "completed";
+    target.currentStage = "complete";
+    target.progress = 100;
+    target.updatedAt = new Date().toISOString();
+    return target;
   });
 }

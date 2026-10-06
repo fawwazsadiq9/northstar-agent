@@ -6,7 +6,7 @@ export interface Mission {
   id: string; objective: string; status: MissionStatus; progress: number; currentStage: string; createdAt: string; updatedAt: string;
 }
 export interface Opportunity {
-  id: string; businessName: string; website?: string; category: string; location: string; score: number; signals: string[];
+  id: string; businessName: string; website?: string; deployedWebsiteUrl?: string; category: string; location: string; score: number; signals: string[];
   status: OpportunityStatus; source?: string; sourceId?: string; phone?: string; createdAt: string;
 }
 export interface Lead {

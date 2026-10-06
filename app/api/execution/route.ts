@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
+import { readDB } from "../../../lib/store";
 import { createLeadResponse, approveLeadResponse, sendLeadResponse, createAppointment, createDeal, closeDeal } from "../../../lib/revenueExecution";
+export async function GET(){ return NextResponse.json((await readDB()).leadResponses); }
 export async function POST(request:Request){
  const b=await request.json().catch(()=>({})); const action=String(b.action||"");
  try{

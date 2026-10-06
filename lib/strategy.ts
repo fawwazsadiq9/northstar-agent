@@ -17,7 +17,7 @@ export async function ensureExperiment(missionId:string,context:StrategyContext)
 }
 
 export async function assignStrategy(missionId:string,context:StrategyContext){
- const e=await ensureExperiment(missionId,context);return updateDB(db=>{const d=sdb(db);const exp=d.strategyExperiments!.find(x=>x.id===e.id)!;const counts=exp.variants.map(v=>({v,count:d.strategyObservations!.filter(o=>o.experimentId===e.id&&o.variantId===v).length}));const min=Math.min(...counts.map(x=>x.count));const chosen=counts.filter(x=>x.count===min)[Math.floor(Math.random()*counts.filter(x=>x.count===min).length)].v;exp.assignments++;return d.strategyVariants!.find(v=>v.id===chosen)!;});
+ const e=await ensureExperiment(missionId,context);return updateDB(db=>{const d=sdb(db);const exp=d.strategyExperiments!.find(x=>x.id===e.id)!;const counts=exp.variants.map(v=>({v,count:d.strategyObservations!.filter(o=>o.experimentId===e.id&&o.variantId===v).length}));const min=Math.min(...counts.map(x=>x.count));const chosen=counts.filter(x=>x.count===min).sort((a,b)=>a.v.localeCompare(b.v))[exp.assignments%counts.filter(x=>x.count===min).length].v;exp.assignments++;return d.strategyVariants!.find(v=>v.id===chosen)!;});
 }
 
 export async function recordStrategyObservation(input:Omit<StrategyObservation,"id"|"createdAt">){

@@ -1,7 +1,7 @@
 import { updateDB, readDB } from "./store";
 import { id } from "./id";
 import { discoverOpportunities } from "./discovery";
-import type { Mission } from "./types";
+import type { Mission } from "./types";\nimport { generateWebsite } from "./operator";
 
 const stages = ["discover", "qualify", "build", "prepare outreach", "queue follow-up", "measure"];
 

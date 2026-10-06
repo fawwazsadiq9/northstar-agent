@@ -29,7 +29,7 @@ export async function generateWebsite(opportunity: Opportunity): Promise<Asset> 
   let title = "AI-generated deployable website";
   try {
     content = await generateText({
-      system: system + ` Return ONLY a complete self-contained HTML document. Use inline CSS and vanilla JavaScript only. Do not invent reviews, prices, credentials, awards, addresses, hours or testimonials. Do not add external scripts, tracking pixels, analytics, network requests, or forms that transmit data.`,
+      system: system + ` Return ONLY a complete self-contained HTML document. Use inline CSS and vanilla JavaScript only. Do not invent reviews, prices, credentials, awards, addresses, hours or testimonials. Do not add external scripts, tracking pixels, or analytics. The contact form MUST POST JSON to the Northstar lead-intake endpoint using the configured public app URL and opportunity ID.`,
       prompt: `Generate a polished lead-generation website for:
 Business: ${opportunity.businessName}
 Category: ${opportunity.category}
@@ -37,7 +37,7 @@ Location: ${opportunity.location}
 Known phone: ${opportunity.phone || "not provided"}
 Known website: ${opportunity.website || "not provided"}
 Evidence: ${opportunity.signals.join("; ")}
-Include hero, value/services section using safe generic language, CTA, contact form UI, accessibility and mobile responsiveness. The form must remain a UI-only demo until a CRM is connected.`
+Include hero, value/services section using safe generic language, CTA, contact form UI, accessibility and mobile responsiveness. Use this endpoint: ${process.env.NORTHSTAR_PUBLIC_URL || ""}/api/leads/intake. Include opportunityId="${opportunity.id}" and source="website".`
     });
     if (!content.toLowerCase().includes("<html")) throw new Error("AI returned invalid HTML");
   } catch {

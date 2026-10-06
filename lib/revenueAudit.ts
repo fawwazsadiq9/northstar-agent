@@ -33,9 +33,9 @@ export function buildRevenueAudit(o: Opportunity): RevenueAudit {
   let low = 2;
   let high = 5;
 
-  if (hasSignal(o, /^No website listed in OpenStreetMap$/i)) {
-    gaps.push("Weak or missing web presence signal");
-    actions.push("Deploy a conversion-focused website with a clear call-to-action");
+  if (o.websiteVerified === false && hasSignal(o, /could not be reached/i)) {
+    gaps.push("Listed website is currently unreachable");
+    actions.push("Offer a conversion-focused replacement or recovery plan with a clear call-to-action");
     low += 2; high += 4;
   }
   if (hasSignal(o, /phone/i)) {
@@ -53,7 +53,7 @@ export function buildRevenueAudit(o: Opportunity): RevenueAudit {
     low += 1; high += 2;
   }
 
-  if (!gaps.length) {
+  if (!gaps.length && !o.website) {\n    actions.push("Verify whether the business has an active website before making a web-presence claim");\n  }\n\n  if (!gaps.length) {
     gaps.push("Insufficient public evidence for a specific revenue leak");
     actions.push("Run a deeper website, response-time, and funnel audit before making claims");
   }

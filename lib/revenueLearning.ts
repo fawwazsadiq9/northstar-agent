@@ -33,7 +33,7 @@ export interface StrategyLift {
   eligibleForPlaybook:boolean;
 }
 
-type LearningDB=Awaited<ReturnType<typeof readDB>> & {
+type LearningDB=Awaited<ReturnType<typeof readDB>> & { strategyObservations?:Array<{id:string;experimentId:string;variantId:string;opportunityId?:string;leadId?:string;outcome:"pending"|"won"|"lost"|"failed";revenue:number;createdAt:string}>; strategyVariants?:Array<{id:string;name:string;description:string;context:StrategyContext;createdAt:string}>; strategyExperiments?:Array<{id:string;missionId:string;context:StrategyContext;variants:string[];assignments:number;createdAt:string}>;
   revenueAttributions?:RevenueAttribution[];
   strategyPlaybooks?:StrategyPlaybook[];
 };

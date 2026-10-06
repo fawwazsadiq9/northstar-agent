@@ -39,6 +39,7 @@ export interface Opportunity {
   source?: string;
   sourceId?: string;
   phone?: string;
+  contactEmail?: string;
   createdAt: string;
 }
 

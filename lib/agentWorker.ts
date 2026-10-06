@@ -4,7 +4,7 @@ import { discoverOpportunities } from "./discovery";
 import { draftOutreach, generateWebsite } from "./operator";
 import { advanceMissionGraph } from "./missionGraph";
 
-import { readDB } from "./store";
+import { readDB, updateDB } from "./store";
 
 async function executeTool(job:AgentJob, tool:string, input:Record<string,unknown>, fn:()=>Promise<Record<string,unknown>>) {
   const execution=await recordToolExecution({jobId:job.id,tool,status:"running",input});

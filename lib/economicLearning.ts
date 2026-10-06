@@ -54,7 +54,7 @@ function prior(rows:EconomicObservation[],fallbackValue:number):EconomicPrior{
   const expectedRevenue=winProbability*avgDeal;
   const expectedValue=expectedRevenue-avgCost;
   const confidence=Math.min(1,n/30);
-  return {key:"",context:{industry:"",geography:"",opportunityType:"",strategy:""},observations:n,wins,winProbability,avgDealValue:avgDeal,avgAcquisitionCost:avg(rows.map(x=>x.acquisitionCost),.1),avgExecutionCost:avg(rows.map(x=>x.executionCost,.9),.9),avgDaysToCash:avgDays,expectedRevenue,expectedValue,confidence,updatedAt:new Date().toISOString()};
+  return {key:"",context:{industry:"",geography:"",opportunityType:"",strategy:""},observations:n,wins,winProbability,avgDealValue:avgDeal,avgAcquisitionCost:avg(rows.map(x=>x.acquisitionCost),.1),avgExecutionCost:avg(rows.map(x=>x.executionCost),.9),avgDaysToCash:avgDays,expectedRevenue,expectedValue,confidence,updatedAt:new Date().toISOString()};
 }
 
 export async function rebuildEconomicPriors(){

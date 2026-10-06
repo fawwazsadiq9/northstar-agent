@@ -26,6 +26,7 @@ export async function reconcilePendingDecisions() {
 }
 
 export async function getDecisionLearning() {
+  await reconcilePendingDecisions();
   const db=memory(await readDB()), all=db.decisionMemory!, byAction:Record<string,{decisions:number;resolved:number;successRate:number;averageReward:number;revenueDelta:number}>={};
   for(const x of all){const s=byAction[x.action]??={decisions:0,resolved:0,successRate:0,averageReward:0,revenueDelta:0};s.decisions++;if(x.outcome!=="pending"){s.resolved++;s.successRate+=x.outcome==="succeeded"?1:0;s.averageReward+=x.reward;s.revenueDelta+=x.revenueDelta;}}
   for(const s of Object.values(byAction)){if(s.resolved){s.successRate/=s.resolved;s.averageReward/=s.resolved;s.revenueDelta/=s.resolved;}}

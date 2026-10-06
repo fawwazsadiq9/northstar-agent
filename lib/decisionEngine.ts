@@ -4,7 +4,7 @@ import { recordDecision, attachDecisionJob, getDecisionLearning } from "./decisi
 
 export type DecisionAction = "discover"|"build"|"outreach"|"follow_up"|"measurement"|"recover"|"wait"|"approve";
 export interface DecisionCandidate { action:DecisionAction; score:number; reason:string; jobKind?:JobKind; opportunityId?:string; leadId?:string; requiresApproval?:boolean; }
-export interface Decision { missionId:string; selected?:DecisionCandidate; candidates:DecisionCandidate[]; rationale:string; generatedAt:string; }
+export interface Decision { missionId:string; selected?:DecisionCandidate; candidates:DecisionCandidate[]; rationale:string; generatedAt:string; decisionId?:string; }
 
 function hasPendingJob(jobs:AgentJob[], missionId:string, kind:JobKind, opportunityId?:string) {
   return jobs.some(j=>j.missionId===missionId && j.kind===kind && ["queued","running","retrying","blocked"].includes(j.status) && (!opportunityId || j.opportunityId===opportunityId));
@@ -54,7 +54,6 @@ export async function decideNextAction(missionId:string):Promise<Decision> {
 
 export async function executeDecision(missionId:string):Promise<Decision> {
   const decision=await decideNextAction(missionId);
-  const c=decision.selected;
   const c=decision.selected;
   const db=await readDB();
   const baselineWonRevenue=db.revenue.filter(r=>r.type==="won").reduce((s,r)=>s+r.amount,0);

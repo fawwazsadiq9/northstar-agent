@@ -34,6 +34,7 @@ export async function selectContextualStrategy(missionId: string, action: string
     channel: channelVariants(action),
   };
   const experiment = await ensureExperiment(missionId, context);
+  await (await import("./revenueLearning")).buildPlaybooks();
   const learningDB = await readDB() as Awaited<ReturnType<typeof readDB>> & { strategyPlaybooks?: Array<{key:string;recommendedVariantId:string;confidence:number}> };
   const playbookKey = [context.industry,context.geography,context.opportunityType,context.leadStage,context.channel].map(x=>x.trim().toLowerCase()).join("|");
   const playbook = learningDB.strategyPlaybooks?.find(p=>p.key===playbookKey && p.confidence>=0.5);

@@ -64,7 +64,7 @@ export async function executeDecision(missionId:string):Promise<Decision> {
   const baselineWonRevenue=db.revenue.filter(r=>r.type==="won").reduce((s,r)=>s+r.amount,0);
   const memory=await recordDecision({missionId,action:c?.action||"wait",score:c?.score||0,reason:c?.reason||"No action",candidateActions:decision.candidates.map(x=>x.action),selected:true,opportunityId:c?.opportunityId,leadId:c?.leadId,baselineWonRevenue,outcome:"pending",reward:0,revenueDelta:0});
   if(!c||!c.jobKind||c.requiresApproval) return {...decision,decisionId:memory.id};
-  const strategy=(c.action==="build"||c.action==="outreach"||c.action==="follow_up"||c.action==="offer") ? await selectContextualStrategy(missionId,c.action,c.opportunityId,c.leadId) : null;
+  const strategy=(c.action==="build"||c.action==="outreach"||c.action==="follow_up") ? await selectContextualStrategy(missionId,c.action,c.opportunityId,c.leadId) : null;
   const job=await enqueueJob({kind:c.jobKind,missionId,opportunityId:c.opportunityId,leadId:c.leadId,payload:{decision:c.action,reason:c.reason,decisionId:memory.id,strategyExperimentId:strategy?.experimentId,strategyVariantId:strategy?.variant.id,strategyContext:strategy?.context,strategyRationale:strategy?.rationale},idempotencyKey:`decision:${missionId}:${c.action}:${c.opportunityId||"global"}`,maxAttempts:3,runAfter:new Date().toISOString()});
   await attachDecisionJob(memory.id,job.id);
   return {...decision,decisionId:memory.id};

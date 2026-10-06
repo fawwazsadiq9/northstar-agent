@@ -33,7 +33,7 @@ export function buildRevenueAudit(o: Opportunity): RevenueAudit {
   let low = 2;
   let high = 5;
 
-  if (hasSignal(o, /no website|website/i)) {
+  if (hasSignal(o, /^No website listed in OpenStreetMap$/i)) {
     gaps.push("Weak or missing web presence signal");
     actions.push("Deploy a conversion-focused website with a clear call-to-action");
     low += 2; high += 4;

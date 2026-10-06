@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<scheme version="2.0" title="Northstar Opportunity Intelligence" description="Northstar exports real opportunity outcomes to CSV. Orange is used to explore drivers of conversion and evaluate predictive models without inventing business outcomes.">
+<nodes>
+<node id="0" name="File" qualified_name="Orange.widgets.data.owfile.OWFile" project_name="Orange3" version="" title="Northstar Opportunity CSV" position="(80.0,180.0)">
+<properties>
+<property name="recent_paths" type="str">northstar-orange-opportunities.csv</property>
+</properties>
+</node>
+<node id="1" name="Data Table" qualified_name="Orange.widgets.data.owtable.OWTable" project_name="Orange3" version="" title="Opportunity Data" position="(300.0,90.0)" />
+<node id="2" name="Rank" qualified_name="Orange.widgets.data.owrank.OWRank" project_name="Orange3" version="" title="Feature Importance" position="(520.0,90.0)" />
+<node id="3" name="Random Forest" qualified_name="Orange.widgets.model.owrandomforest.OWRandomForest" project_name="Orange3" version="" title="Conversion Model" position="(500.0,230.0)" />
+<node id="4" name="Logistic Regression" qualified_name="Orange.widgets.model.owlogisticregression.OWLogisticRegression" project_name="Orange3" version="" title="Interpretable Model" position="(500.0,350.0)" />
+<node id="5" name="Test &amp; Score" qualified_name="Orange.widgets.evaluate.owtestandscore.OWTestAndScore" project_name="Orange3" version="" title="Model Evaluation" position="(740.0,230.0)" />
+<node id="6" name="Confusion Matrix" qualified_name="Orange.widgets.evaluate.owconfusionmatrix.OWConfusionMatrix" project_name="Orange3" version="" title="Conversion Errors" position="(950.0,230.0)" />
+</nodes>
+<links>
+<link id="0" source_node_id="0" sink_node_id="1" source_channel="Data" sink_channel="Data" />
+<link id="1" source_node_id="0" sink_node_id="2" source_channel="Data" sink_channel="Data" />
+<link id="2" source_node_id="0" sink_node_id="3" source_channel="Data" sink_channel="Data" />
+<link id="3" source_node_id="0" sink_node_id="4" source_channel="Data" sink_channel="Data" />
+<link id="4" source_node_id="3" sink_node_id="5" source_channel="Learner" sink_channel="Learner" />
+<link id="5" source_node_id="4" sink_node_id="5" source_channel="Learner" sink_channel="Learner" />
+<link id="6" source_node_id="0" sink_node_id="5" source_channel="Data" sink_channel="Data" />
+<link id="7" source_node_id="5" sink_node_id="6" source_channel="Evaluation Results" sink_channel="Evaluation Results" />
+</links>
+<annotations />
+<thumbnail />
+</scheme>

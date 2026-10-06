@@ -19,8 +19,8 @@ function estimateWinProbability(db:Awaited<ReturnType<typeof readDB>>,o:Opportun
   const resolved=historical.filter(x=>x.status==="won"||x.status==="lost"||db.deals.some(d=>d.opportunityId===x.id&&(d.status==="won"||d.status==="lost"))).length;
   const empirical=resolved>=5?won/resolved:0.12;
   const scorePrior=Math.max(.02,Math.min(.45,o.score/100*.35));
-  const contactPrior=o.contactEmail?.length?.toString()?0.08:0;
-  const phonePrior=o.phone?.length?.toString()?0.03:0;
+  const contactPrior=o.contactEmail?0.08:0;
+  const phonePrior=o.phone?0.03:0;
   const base=resolved>=5?.65*empirical+.35*scorePrior:scorePrior;
   return Math.max(.02,Math.min(.75,base+contactPrior+phonePrior));
 }
@@ -44,13 +44,13 @@ export async function scoreOpportunity(opportunityId:string):Promise<EconomicMod
   const riskPenalty=expectedDealValue*(1-winProbability)*envNumber("NORTHSTAR_RISK_RATE",.08);
   const expectedRevenue=winProbability*expectedDealValue,expectedValue=expectedRevenue-acquisitionCost-executionCost-riskPenalty;
   const expectedDaysToCash=estimateDays(o,leads,deals),expectedCashVelocity=expectedValue/Math.max(1,expectedDaysToCash);
-  const learningValue=(o.contactEmail?.length?.toString()?0.5:0.2)+(o.websiteVerified===false?0.4:0)+(db.opportunities.filter(x=>x.category===o.category).length<20?0.6:0);
+  const learningValue=(o.contactEmail?0.5:0.2)+(o.websiteVerified===false?0.4:0)+(db.opportunities.filter(x=>x.category===o.category).length<20?0.6:0);
   const rationale:string[]=[];
   rationale.push(expectedValue>0?"Positive estimated economic value after modeled costs and risk.":"Estimated value is non-positive after modeled costs and risk.");
   if(expectedCashVelocity>0)rationale.push("Estimated cash velocity is $"+expectedCashVelocity.toFixed(0)+"/day.");
   if(o.contactEmail)rationale.push("A direct contact path reduces acquisition friction.");
   if(o.websiteVerified===false)rationale.push("A verified website gap increases the value of a website-led experiment.");
-  const recommendation:Economics["recommendation"] = expectedValue<=0?"reject":expectedCashVelocity>=envNumber("NORTHSTAR_PURSUIT_VELOCITY_USD_PER_DAY",50)?"pursue":learningValue>=.7?"explore":"defer";
+  const recommendation:EconomicModel["recommendation"] = expectedValue<=0?"reject":expectedCashVelocity>=envNumber("NORTHSTAR_PURSUIT_VELOCITY_USD_PER_DAY",50)?"pursue":learningValue>=.7?"explore":"defer";
   const economicScore=Math.max(0,Math.min(100,50+expectedCashVelocity/Math.max(1,envNumber("NORTHSTAR_SCORE_DOLLARS_PER_DAY",100))*50+learningValue*10-(expectedValue<0?40:0)));
   return {opportunityId:o.id,businessName:o.businessName,expectedDealValue,winProbability,acquisitionCost,executionCost,riskPenalty,expectedRevenue,expectedValue,expectedCashVelocity,expectedDaysToCash,learningValue,economicScore,recommendation,rationale,assumptions:["Deal value is a category prior until Northstar has enough resolved deals.","Win probability is an estimate until sufficient resolved outcomes exist.","Acquisition and execution costs are configurable estimates, not provider invoices."]};
 }

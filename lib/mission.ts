@@ -45,7 +45,11 @@ export async function runMission(missionId: string) {
   if (topOpportunity) {
     const db = await readDB();
     const hasWebsite = db.assets.some(a => a.opportunityId === topOpportunity.id && a.type === "website");
-    if (!hasWebsite) await generateWebsite(topOpportunity);\n    if (topOpportunity.contactEmail && process.env.AI_GATEWAY_API_KEY) {\n      const hasOutreach = db.assets.some(a => a.opportunityId === topOpportunity.id && a.type === "email");\n      if (!hasOutreach) await (await import("./operator")).draftOutreach(topOpportunity);\n    }
+    if (!hasWebsite) await generateWebsite(topOpportunity);
+    if (topOpportunity.contactEmail && process.env.AI_GATEWAY_API_KEY) {
+      const hasOutreach = db.assets.some(a => a.opportunityId === topOpportunity.id && a.type === "email");
+      if (!hasOutreach) await (await import("./operator")).draftOutreach(topOpportunity);
+    }
   }
 
   return updateDB(db => {

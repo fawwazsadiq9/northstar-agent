@@ -46,7 +46,7 @@ async function executeJob(job:AgentJob):Promise<Record<string,unknown>> {
       const asset=await executeTool(job,"outreach.draft",{opportunityId:opportunity.id},async()=>({asset:await draftOutreach(opportunity)}));
       return asset;
     }
-    case "follow_up": { const { runDueFollowUps } = await import("./followup"); return executeTool(job,"follow_up.run",{missionId:job.missionId||null},async()=>runDueFollowUps(20) as Promise<Record<string,unknown>>); }
+    case "follow_up": { const { runDueFollowUps } = await import("./revenueExecution"); return executeTool(job,"follow_up.run",{missionId:job.missionId||null},async()=>runDueFollowUps(20) as Promise<Record<string,unknown>>); }
     case "measurement": {
       const db=await readDB();
       return await executeTool(job,"revenue.measure",{opportunityId:job.opportunityId||null},async()=>({

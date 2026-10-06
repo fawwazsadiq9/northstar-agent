@@ -5,7 +5,7 @@ export type LeadStatus = "new" | "qualified" | "replied" | "meeting" | "won" | "
 export interface Mission {
   id: string; objective: string; status: MissionStatus; progress: number; currentStage: string; createdAt: string; updatedAt: string;
 }
-export interface Opportunity {
+export interface RevenueAudit {\n  opportunityId: string;\n  businessName: string;\n  score: number;\n  confidence: number;\n  modeledMonthlyOpportunities: { low: number; high: number };\n  modeledAnnualRevenue: { low: number; high: number };\n  assumedDealValue: number;\n  gaps: string[];\n  actions: string[];\n  disclaimer: string;\n}\n\nexport interface Opportunity {
   id: string; businessName: string; website?: string; deployedWebsiteUrl?: string; category: string; location: string; score: number; signals: string[];
   status: OpportunityStatus; source?: string; sourceId?: string; phone?: string; createdAt: string;
 }

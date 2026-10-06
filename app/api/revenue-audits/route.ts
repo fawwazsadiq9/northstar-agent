@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { readDB } from "../../../../lib/store";
-import { buildRevenueAudit } from "../../../../lib/revenueAudit";
+import { readDB } from "../../../lib/store";
+import { buildRevenueAudit } from "../../../lib/revenueAudit";
 
 export async function GET(request: Request) {
   const opportunityId = new URL(request.url).searchParams.get("opportunityId");

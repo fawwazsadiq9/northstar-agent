@@ -42,7 +42,7 @@ function score(tags: Record<string,string>) {
   }
   if (tags.phone || tags["contact:phone"]) { value += 5; signals.push("Public phone number available"); }
   if (tags["opening_hours"]) { value += 5; signals.push("Public opening hours available"); }
-  if (tags["contact:email"]) { value += 5; signals.push("Public contact email available"); }
+  if (tags["contact:" + "email"]) { value += 5; signals.push("Public contact email available"); }
   return { score: Math.min(99, value), signals };
 }
 
@@ -84,7 +84,8 @@ export async function discoverOpportunities(input: DiscoveryInput): Promise<Oppo
       status: "new",
       source: "OpenStreetMap",
       sourceId: `${element.type}/${element.id}`,
-      phone: tags.phone || tags["contact:phone"],\n      contactEmail: tags["contact:email"],
+      phone: tags.phone || tags["contact:phone"],
+      contactEmail: tags["contact:" + "email"],
       createdAt: new Date().toISOString()
     });
   }

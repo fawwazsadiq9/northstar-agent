@@ -2,7 +2,8 @@ export type AuditAction =
   | "mission.created"
   | "opportunity.discovered"
   | "asset.generated"
-  | "outreach.drafted"\n  | "lead.created"
+  | "outreach.drafted"
+  | "lead.created"
   | "external_action.approved"
   | "external_action.executed";
 

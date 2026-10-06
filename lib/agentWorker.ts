@@ -5,6 +5,7 @@ import { draftOutreach, generateWebsite } from "./operator";
 import { advanceMissionGraph } from "./missionGraph";
 
 import { readDB, updateDB } from "./store";
+import { resolveDecisionForJob } from "./decisionMemory";
 
 async function executeTool(job:AgentJob, tool:string, input:Record<string,unknown>, fn:()=>Promise<Record<string,unknown>>) {
   const execution=await recordToolExecution({jobId:job.id,tool,status:"running",input});
@@ -67,6 +68,8 @@ export async function runWorker(limit=5) {
       await markNode(job,"running");
       const result=await executeJob(job);
       await completeJob(job.id,result);
+      const current=await readDB();
+      await resolveDecisionForJob(job,"succeeded",current.revenue.filter(r=>r.type==="won").reduce((s,r)=>s+r.amount,0));
       await markNode(job,"succeeded");
       if(job.missionId) await advanceMissionGraph(job.missionId);
       await audit("external_action.executed","system","job",job.id,{kind:job.kind,attempt:job.attempts});
@@ -75,6 +78,7 @@ export async function runWorker(limit=5) {
       const message=error instanceof Error?error.message:"Worker execution failed";
       await markNode(job,"failed");
       const failed=await (await import("./controlPlane")).failJob(job.id,message);
+      if(failed.status==="failed") await resolveDecisionForJob(job,"failed");
       await audit("external_action.executed","system","job",job.id,{kind:job.kind,attempt:job.attempts,error:message,status:failed.status});
       results.push({jobId:job.id,status:failed.status,error:message});
     }

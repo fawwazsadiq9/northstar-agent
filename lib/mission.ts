@@ -1,7 +1,8 @@
 import { updateDB, readDB } from "./store";
 import { id } from "./id";
 import { discoverOpportunities } from "./discovery";
-import type { Mission } from "./types";\nimport { generateWebsite } from "./operator";
+import { generateWebsite } from "./operator";
+import type { Mission } from "./types";
 
 const stages = ["discover", "qualify", "build", "prepare outreach", "queue follow-up", "measure"];
 
@@ -26,17 +27,32 @@ export async function runMission(missionId: string) {
 
   const opportunities = await discoverOpportunities({ location: discoveryLocation(mission.objective), limit: 10 });
 
-  return updateDB(async db => {
+  const fresh = await updateDB(db => {
     const target = db.missions.find(m => m.id === missionId);
     if (!target) throw new Error("Mission not found");
     target.status = "running";
+    target.currentStage = "discover";
+    target.progress = Math.round((1 / stages.length) * 100);
     target.updatedAt = new Date().toISOString();
 
     const existing = new Set(db.opportunities.map(o => o.sourceId).filter(Boolean));
-    const fresh = opportunities.filter(o => !o.sourceId || !existing.has(o.sourceId));
-    db.opportunities.unshift(...fresh);
+    const newOpportunities = opportunities.filter(o => !o.sourceId || !existing.has(o.sourceId));
+    db.opportunities.unshift(...newOpportunities);
+    return newOpportunities;
+  });
 
-    for (let i = 0; i < stages.length; i++) {
+  const topOpportunity = fresh[0];
+  if (topOpportunity) {
+    const db = await readDB();
+    const hasWebsite = db.assets.some(a => a.opportunityId === topOpportunity.id && a.type === "website");
+    if (!hasWebsite) await generateWebsite(topOpportunity);
+  }
+
+  return updateDB(db => {
+    const target = db.missions.find(m => m.id === missionId);
+    if (!target) throw new Error("Mission not found");
+
+    for (let i = 1; i < stages.length; i++) {
       target.currentStage = stages[i];
       target.progress = Math.round(((i + 1) / stages.length) * 100);
       target.updatedAt = new Date().toISOString();

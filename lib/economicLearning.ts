@@ -57,7 +57,37 @@ function prior(rows:EconomicObservation[],fallbackValue:number):EconomicPrior{
   return {key:"",context:{industry:"",geography:"",opportunityType:"",strategy:""},observations:n,wins,winProbability,avgDealValue:avgDeal,avgAcquisitionCost:avg(rows.map(x=>x.acquisitionCost),.1),avgExecutionCost:avg(rows.map(x=>x.executionCost),.9),avgDaysToCash:avgDays,expectedRevenue,expectedValue,confidence,updatedAt:new Date().toISOString()};
 }
 
+export async function reconcileEconomicObservations(){
+  const db=await readDB() as EconomicLearningDB;
+  const observations=db.economicObservations??[];
+  const strategyRows=db.strategyObservations??[];
+  const variants=db.strategyVariants??[];
+  for(const row of strategyRows){
+    if(row.outcome!=="won"&&row.outcome!=="lost"||!row.opportunityId) continue;
+    const opportunity=db.opportunities.find(o=>o.id===row.opportunityId);
+    if(!opportunity) continue;
+    const variant=variants.find(v=>v.id===row.variantId);
+    const duplicate=observations.some(x=>x.opportunityId===opportunity.id&&x.action==="strategy:"+row.variantId);
+    if(duplicate) continue;
+    const wonDeal=db.deals.find(d=>d.opportunityId===opportunity.id&&d.status==="won");
+    const economics=(db as EconomicLearningDB).opportunityEconomics?.find(x=>x.opportunityId===opportunity.id);
+    const created=Date.parse(opportunity.createdAt);
+    const closed=wonDeal?.closedAt?Date.parse(wonDeal.closedAt):Date.now();
+    const daysToCash=Number.isFinite(created)&&closed>=created?Math.max(1,(closed-created)/86400000):undefined;
+    observations.push({
+      id:uid("econ_obs"),context:contextFor(opportunity,variant?.name||"baseline"),
+      opportunityId:opportunity.id,action:"strategy:"+row.variantId,
+      acquisitionCost:economics?.acquisitionCost??1,executionCost:economics?.executionCost??1,
+      dealValue:wonDeal?.value??row.revenue??undefined,won:row.outcome==="won",daysToCash,
+      createdAt:new Date().toISOString()
+    });
+  }
+  await updateDB(state=>{(state as EconomicLearningDB).economicObservations=observations;});
+  return observations;
+}
+
 export async function rebuildEconomicPriors(){
+  await reconcileEconomicObservations();
   const db=await readDB() as EconomicLearningDB;
   const rows=db.economicObservations??[];
   const groups=new Map<string,EconomicObservation[]>();

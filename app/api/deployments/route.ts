@@ -68,6 +68,8 @@ export async function POST(request: Request) {
       if (!current) return null;
       current.status = "published";
       current.deploymentUrl = deployment.url;
+      const opportunity = db.opportunities.find(o => o.id === current.opportunityId);
+      if (opportunity) opportunity.deployedWebsiteUrl = deployment.url;
       return current;
     });
 

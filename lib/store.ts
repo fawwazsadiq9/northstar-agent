@@ -2,8 +2,6 @@ import postgres from "postgres";
 import type { NorthstarDB } from "./types";
 
 const connectionString = process.env.DATABASE_URL;
-if (!connectionString && process.env.NODE_ENV === "production") throw new Error("DATABASE_URL is required in production");
-
 const sql = connectionString ? postgres(connectionString, { max: 1, prepare: false }) : null;
 const emptyDB: NorthstarDB = { missions:[], opportunities:[], leads:[], assets:[], revenue:[], leadResponses:[], appointments:[], deals:[], attributions:[], executions:[], audit:[] };
 
@@ -17,6 +15,12 @@ async function ensureDB() {
   await sql`INSERT INTO northstar_state (id,data) VALUES (1, ${sql.json(emptyDB)}) ON CONFLICT (id) DO NOTHING`;
 }
 
+function normalize(db: NorthstarDB): NorthstarDB {
+  db.missions ??=[]; db.opportunities ??=[]; db.leads ??=[]; db.assets ??=[]; db.revenue ??=[];
+  db.leadResponses ??=[]; db.appointments ??=[]; db.deals ??=[]; db.attributions ??=[]; db.executions ??=[]; db.audit ??=[];
+  return db;
+}
+
 export async function readDB(): Promise<NorthstarDB> {
   if (!sql) {
     const { promises: fs } = await import("node:fs");
@@ -28,7 +32,7 @@ export async function readDB(): Promise<NorthstarDB> {
   }
   await ensureDB();
   const rows = await sql`SELECT data FROM northstar_state WHERE id=1`;
-  return (rows[0]?.data as NorthstarDB) || structuredClone(emptyDB);
+  return normalize((rows[0]?.data as NorthstarDB) || structuredClone(emptyDB));
 }
 
 export async function writeDB(db: NorthstarDB) {

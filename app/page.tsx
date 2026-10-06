@@ -5,6 +5,8 @@ import { useEffect, useMemo, useState } from "react";
 type Mission = { id:string; objective:string; status:string; progress:number; currentStage:string; updatedAt:string };
 type Opportunity = { id:string; businessName:string; website?:string; deployedWebsiteUrl?:string; category:string; location:string; score:number; status:string; contactEmail?:string };
 type Asset = { id:string; opportunityId:string; type:"website"|"offer"|"email"; title:string; content:string; status:"draft"|"ready"|"published"; deploymentUrl?:string; createdAt:string };
+type Lead = { id:string; opportunityId:string; name:string; email?:string; phone?:string; message?:string; status:string; source:string; createdAt:string };
+type RevenueEvent = { id:string; opportunityId?:string; type:string; amount:number; currency:string; note:string; createdAt:string };
 type RevenueAudit = { opportunityId:string; businessName:string; score:number; confidence:number; modeledMonthlyOpportunities:{low:number;high:number}; modeledAnnualRevenue:{low:number;high:number}; assumedDealValue:number; gaps:string[]; actions:string[]; disclaimer:string };
 
 const pillars = [
@@ -18,6 +20,8 @@ export default function Home() {
   const [mission, setMission] = useState<Mission | null>(null);
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [revenue, setRevenue] = useState<RevenueEvent[]>([]);
   const [busyAsset, setBusyAsset] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -26,14 +30,16 @@ export default function Home() {
   const [busyOutreach, setBusyOutreach] = useState("");
 
   async function refresh() {
-    const [m,o,a] = await Promise.all([
+    const [m,o,a,l,r] = await Promise.all([
       fetch("/api/missions", {cache:"no-store"}),
       fetch("/api/opportunities", {cache:"no-store"}),
-      fetch("/api/assets", {cache:"no-store"})
+      fetch("/api/assets", {cache:"no-store"}),
+      fetch("/api/leads", {cache:"no-store"}),
+      fetch("/api/revenue", {cache:"no-store"})
     ]);
-    if (!m.ok || !o.ok || !a.ok) throw new Error("Workspace refresh failed");
-    const [ms, os, as] = await Promise.all([m.json(), o.json(), a.json()]);
-    setMission(ms[0] ?? null); setOpportunities(os); setAssets(as);
+    if (![m,o,a,l,r].every(x => x.ok)) throw new Error("Workspace refresh failed");
+    const [ms, os, as, ls, rs] = await Promise.all([m.json(), o.json(), a.json(), l.json(), r.json()]);
+    setMission(ms[0] ?? null); setOpportunities(os); setAssets(as); setLeads(ls); setRevenue(rs);
   }
 
   async function launch() {

@@ -24,6 +24,10 @@ export async function recordStrategyObservation(input:Omit<StrategyObservation,"
  return updateDB(db=>{const d=sdb(db);const o={...input,id:id("observation"),createdAt:new Date().toISOString()};d.strategyObservations!.unshift(o);return o;});
 }
 
+export async function reconcileStrategyOutcomes(){
+ return updateDB(db=>{const d=sdb(db);for(const o of d.strategyObservations!){if(o.outcome!=="pending"||!o.opportunityId)continue;const won=d.deals.filter(x=>x.opportunityId===o.opportunityId&&x.status==="won");if(won.length){o.outcome="won";o.revenue=won.reduce((s,x)=>s+x.value,0);}}return d.strategyObservations!;});
+}
 export async function strategyPerformance(){
+ await reconcileStrategyOutcomes();
  const d=sdb(await readDB());const result=d.strategyVariants!.map(v=>{const o=d.strategyObservations!.filter(x=>x.variantId===v.id),resolved=o.filter(x=>x.outcome!=="pending"),won=resolved.filter(x=>x.outcome==="won");return {variant:v,observations:o.length,resolved:resolved.length,winRate:resolved.length?won.length/resolved.length:0,revenue:won.reduce((s,x)=>s+x.revenue,0),avgRevenue:won.length?won.reduce((s,x)=>s+x.revenue,0)/won.length:0};});return result;
 }

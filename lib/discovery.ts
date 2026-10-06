@@ -84,7 +84,7 @@ export async function discoverOpportunities(input: DiscoveryInput): Promise<Oppo
       status: "new",
       source: "OpenStreetMap",
       sourceId: `${element.type}/${element.id}`,
-      phone: tags.phone || tags["contact:phone"],
+      phone: tags.phone || tags["contact:phone"],\n      email: tags["contact:email"],
       createdAt: new Date().toISOString()
     });
   }

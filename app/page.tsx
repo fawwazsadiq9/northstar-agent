@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 
 type Mission = { id:string; objective:string; status:string; progress:number; currentStage:string; updatedAt:string };
 type Opportunity = { id:string; businessName:string; website?:string; deployedWebsiteUrl?:string; category:string; location:string; score:number; status:string };
-type Asset = { id:string; opportunityId:string; type:"website"|"offer"|"email"; title:string; content:string; status:"draft"|"ready"|"published"; deploymentUrl?:string; createdAt:string };
+type Asset = { id:string; opportunityId:string; type:"website"|"offer"|"email"; title:string; content:string; status:"draft"|"ready"|"published"; deploymentUrl?:string; createdAt:string };\ntype RevenueAudit = { opportunityId:string; businessName:string; score:number; confidence:number; modeledMonthlyOpportunities:{low:number;high:number}; modeledAnnualRevenue:{low:number;high:number}; assumedDealValue:number; gaps:string[]; actions:string[]; disclaimer:string };
 
 const pillars = [
   { label:"DISCOVER", title:"Find revenue opportunities", text:"Surface businesses with measurable gaps and rank them by revenue potential." },
@@ -19,7 +19,7 @@ export default function Home() {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [busyAsset, setBusyAsset] = useState("");
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const [notice, setNotice] = useState("");\n  const [audits, setAudits] = useState<Record<string, RevenueAudit>>({});\n  const [busyAudit, setBusyAudit] = useState("");
 
   async function refresh() {
     const [m,o,a] = await Promise.all([
@@ -44,7 +44,7 @@ export default function Home() {
     finally { setRunning(false); }
   }
 
-  async function approveAndDeploy(asset: Asset) {
+  async function runRevenueAudit(opportunityId: string) {\n    setBusyAudit(opportunityId); setError(""); setNotice("");\n    try {\n      const res = await fetch(`/api/revenue-audits?opportunityId=${encodeURIComponent(opportunityId)}`, {cache:"no-store"});\n      const data = await res.json().catch(() => ({}));\n      if (!res.ok) throw new Error(data.error || "Revenue audit failed");\n      setAudits(current => ({...current, [opportunityId]: data}));\n    } catch (e) { setError(e instanceof Error ? e.message : "Revenue audit failed"); }\n    finally { setBusyAudit(""); }\n  }\n\n  async function approveAndDeploy(asset: Asset) {
     if (asset.status === "published" && asset.deploymentUrl) return;
     setBusyAsset(asset.id); setError(""); setNotice("");
     try {
@@ -135,7 +135,7 @@ export default function Home() {
             <div className="score">{o.score}</div>
             <div className="opportunity-main">
               <strong>{o.businessName}</strong><span>{o.category} · {o.location}</span>
-              <div className="website-workspace">
+              <div className="audit-workspace">\n                <div>\n                  <small className="workspace-label">REVENUE AUDIT</small>\n                  <b>{audits[o.id] ? `MODELED ${Math.round(audits[o.id].modeledAnnualRevenue.low / 1000)}K–${Math.round(audits[o.id].modeledAnnualRevenue.high / 1000)}K / YEAR` : "NOT YET MODELED"}</b>\n                </div>\n                <button className="audit-button" onClick={() => runRevenueAudit(o.id)} disabled={busyAudit === o.id}>\n                  {busyAudit === o.id ? "ANALYZING…" : audits[o.id] ? "REFRESH AUDIT" : "RUN REVENUE AUDIT"}\n                </button>\n              </div>\n              {audits[o.id] && <div className="audit-result"><span>{audits[o.id].confidence}% confidence</span><span>{audits[o.id].modeledMonthlyOpportunities.low}–{audits[o.id].modeledMonthlyOpportunities.high} modeled opportunities/mo</span><span>Assumed deal value ${audits[o.id].assumedDealValue.toLocaleString()}</span></div>}\n              <div className="website-workspace">
                 <div>
                   <small className="workspace-label">WEBSITE WORKSPACE</small>
                   <b>{liveUrl ? "LIVE ON VERCEL" : asset ? "WEBSITE ASSET READY" : "NO WEBSITE ASSET"}</b>

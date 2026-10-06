@@ -25,7 +25,7 @@ export async function recordStrategyObservation(input:Omit<StrategyObservation,"
 }
 
 export async function reconcileStrategyOutcomes(){
- return updateDB(db=>{const d=sdb(db);for(const o of d.strategyObservations!){if(o.outcome!=="pending"||!o.opportunityId)continue;const won=d.deals.filter(x=>x.opportunityId===o.opportunityId&&x.status==="won");if(won.length){o.outcome="won";o.revenue=won.reduce((s,x)=>s+x.value,0);}}return d.strategyObservations!;});
+ return updateDB(db=>{const d=sdb(db);for(const o of d.strategyObservations!){if(o.outcome!=="pending")continue;const won=o.opportunityId?d.deals.filter(x=>x.opportunityId===o.opportunityId&&x.status==="won"):[];if(won.length){o.outcome="won";o.revenue=won.reduce((s,x)=>s+x.value,0);continue;}if(o.leadId){const lead=d.leads.find(x=>x.id===o.leadId);if(lead?.status==="lost")o.outcome="lost";}if(o.opportunityId){const opp=d.opportunities.find(x=>x.id===o.opportunityId);if(opp?.status==="lost")o.outcome="lost";}}return d.strategyObservations!;});
 }
 export async function strategyPerformance(){
  await reconcileStrategyOutcomes();

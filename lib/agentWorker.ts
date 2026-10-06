@@ -6,6 +6,7 @@ import { advanceMissionGraph } from "./missionGraph";
 
 import { readDB, updateDB } from "./store";
 import { resolveDecisionForJob } from "./decisionMemory";
+import { recordStrategyObservation } from "./strategy";
 
 async function executeTool(job:AgentJob, tool:string, input:Record<string,unknown>, fn:()=>Promise<Record<string,unknown>>) {
   const execution=await recordToolExecution({jobId:job.id,tool,status:"running",input});
@@ -70,6 +71,7 @@ export async function runWorker(limit=5) {
       await completeJob(job.id,result);
       const current=await readDB();
       await resolveDecisionForJob(job,"succeeded",current.revenue.filter(r=>r.type==="won").reduce((s,r)=>s+r.amount,0));
+      if(job.payload.strategyExperimentId && job.payload.strategyVariantId) await recordStrategyObservation({experimentId:String(job.payload.strategyExperimentId),variantId:String(job.payload.strategyVariantId),opportunityId:job.opportunityId,leadId:job.leadId,outcome:"pending",revenue:0});
       await markNode(job,"succeeded");
       if(job.missionId) await advanceMissionGraph(job.missionId);
       await audit("external_action.executed","system","job",job.id,{kind:job.kind,attempt:job.attempts});

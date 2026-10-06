@@ -1,6 +1,7 @@
 import { enqueueJob, type AgentJob, type JobKind } from "./controlPlane";
 import { readDB } from "./store";
 import { recordDecision, attachDecisionJob, getDecisionLearning } from "./decisionMemory";
+import { strategyPerformance } from "./strategy";
 
 export type DecisionAction = "discover"|"build"|"outreach"|"follow_up"|"measurement"|"recover"|"wait"|"approve";
 export interface DecisionCandidate { action:DecisionAction; score:number; reason:string; jobKind?:JobKind; opportunityId?:string; leadId?:string; requiresApproval?:boolean; }
@@ -46,7 +47,9 @@ export async function decideNextAction(missionId:string):Promise<Decision> {
   if(!candidates.length) candidates.push({action:"discover",score:60,reason:"No higher-value executable action is currently available",jobKind:"discovery"});
 
   const learning=await getDecisionLearning();
+  const strategies=await strategyPerformance();
   for(const candidate of candidates){ const l=learning.byAction[candidate.action]; if(l?.resolved>=3) candidate.score=Math.max(0,Math.min(100,candidate.score + Math.max(-10,Math.min(10,(l.successRate-0.5)*12)) + Math.max(-8,Math.min(8,l.averageReward*2)))); }
+  for(const candidate of candidates){ const matches=strategies.filter(s=>s.variant.context.channel===candidate.action); if(matches.length){ const best=Math.max(...matches.map(s=>s.winRate)); if(best>0.5) candidate.score=Math.min(100,candidate.score+(best-0.5)*10); } }
   candidates.sort((a,b)=>b.score-a.score);
   const selected=candidates[0];
   return {missionId,selected,candidates,rationale:`Selected ${selected.action} because it has the highest current execution value under Northstar's safety and dependency constraints.`,generatedAt:new Date().toISOString()};

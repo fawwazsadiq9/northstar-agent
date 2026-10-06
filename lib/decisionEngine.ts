@@ -3,6 +3,7 @@ import { readDB } from "./store";
 import { recordDecision, attachDecisionJob, getDecisionLearning } from "./decisionMemory";
 import { strategyPerformance } from "./strategy";
 import { selectContextualStrategy } from "./strategyOptimizer";
+import { rankOpportunities, scoreOpportunity } from "./economicOptimizer";
 
 export type DecisionAction = "discover"|"build"|"outreach"|"follow_up"|"measurement"|"recover"|"wait"|"approve";
 export interface DecisionCandidate { action:DecisionAction; score:number; reason:string; jobKind?:JobKind; opportunityId?:string; leadId?:string; requiresApproval?:boolean; }
@@ -28,8 +29,17 @@ export async function decideNextAction(missionId:string):Promise<Decision> {
 
   const fresh=db.opportunities.filter(o=>o.status==="new"&&!db.leads.some(l=>l.opportunityId===o.id));
   if(fresh.length&&!hasPendingJob(jobs,missionId,"build")) {
-    const best=fresh.sort((a,b)=>b.score-a.score)[0];
-    candidates.push({action:"build",score:85+Math.min(10,best.score/10),reason:`High-value unworked opportunity: ${best.businessName}`,jobKind:"build",opportunityId:best.id});
+    const ranked=await rankOpportunities(10);
+    const allowed=new Set(ranked.ranked.map(x=>x.opportunityId));
+    const best=fresh.filter(o=>allowed.has(o.id)).sort((a,b)=>{
+      const ae=ranked.ranked.find(x=>x.opportunityId===a.id)?.economicScore||0;
+      const be=ranked.ranked.find(x=>x.opportunityId===b.id)?.economicScore||0;
+      return be-ae;
+    })[0];
+    if(best){
+      const economics=ranked.ranked.find(x=>x.opportunityId===best.id);
+      candidates.push({action:"build",score:Math.min(100,55+(economics?.economicScore||best.score)*.45),reason:"Economic priority: "+best.businessName+" — expected value $"+(economics?.expectedValue||0).toFixed(0)+", cash velocity $"+(economics?.expectedCashVelocity||0).toFixed(0)+"/day",jobKind:"build",opportunityId:best.id});
+    }
   }
 
   const contacted=db.leads.filter(l=>l.status==="new"&&l.email&&(!l.nextFollowUpAt||Date.parse(l.nextFollowUpAt)<=Date.now()));
@@ -39,8 +49,11 @@ export async function decideNextAction(missionId:string):Promise<Decision> {
 
   const withEmail=db.opportunities.filter(o=>o.contactEmail&&o.status==="qualified");
   if(withEmail.length&&!hasPendingJob(jobs,missionId,"outreach")) {
-    const best=withEmail.sort((a,b)=>b.score-a.score)[0];
-    candidates.push({action:"outreach",score:78+Math.min(10,best.score/10),reason:`Qualified opportunity has a reachable contact: ${best.businessName}`,jobKind:"outreach",opportunityId:best.id,requiresApproval:true});
+    const economics=await Promise.all(withEmail.map(o=>scoreOpportunity(o.id)));
+    const bestEconomics=economics.sort((a,b)=>b.expectedCashVelocity-a.expectedCashVelocity)[0];
+    if(bestEconomics){
+      candidates.push({action:"outreach",score:Math.min(100,55+bestEconomics.economicScore*.45),reason:"Economic priority: "+bestEconomics.businessName+" — expected value $"+bestEconomics.expectedValue.toFixed(0)+", cash velocity $"+bestEconomics.expectedCashVelocity.toFixed(0)+"/day",jobKind:"outreach",opportunityId:bestEconomics.opportunityId,requiresApproval:true});
+    }
   }
 
   if(db.revenue.some(r=>r.type==="won")||db.deals.length) candidates.push({action:"measurement",score:70,reason:"New deal/revenue outcomes can update mission economics",jobKind:"measurement"});

@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type Mission = { id:string; objective:string; status:string; progress:number; currentStage:string; updatedAt:string };
-type Opportunity = { id:string; businessName:string; category:string; location:string; score:number; status:string };
+type Opportunity = { id:string; businessName:string; website?:string; deployedWebsiteUrl?:string; category:string; location:string; score:number; status:string };
+type Asset = { id:string; opportunityId:string; type:"website"|"offer"|"email"; title:string; content:string; status:"draft"|"ready"|"published"; deploymentUrl?:string; createdAt:string };
 
 const pillars = [
   { label:"DISCOVER", title:"Find revenue opportunities", text:"Surface businesses with measurable gaps and rank them by revenue potential." },
@@ -15,27 +16,68 @@ export default function Home() {
   const [running, setRunning] = useState(false);
   const [mission, setMission] = useState<Mission | null>(null);
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
+  const [assets, setAssets] = useState<Asset[]>([]);
+  const [busyAsset, setBusyAsset] = useState("");
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+
+  async function refresh() {
+    const [m,o,a] = await Promise.all([
+      fetch("/api/missions", {cache:"no-store"}),
+      fetch("/api/opportunities", {cache:"no-store"}),
+      fetch("/api/assets", {cache:"no-store"})
+    ]);
+    if (!m.ok || !o.ok || !a.ok) throw new Error("Workspace refresh failed");
+    const [ms, os, as] = await Promise.all([m.json(), o.json(), a.json()]);
+    setMission(ms[0] ?? null); setOpportunities(os); setAssets(as);
+  }
 
   async function launch() {
-    setRunning(true); setError("");
+    setRunning(true); setError(""); setNotice("");
     try {
       const res = await fetch("/api/missions", { method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify({ objective:"Find and pursue the highest-value next revenue opportunity." }) });
       if (!res.ok) throw new Error("Mission launch failed");
       const data = await res.json();
       setMission(data);
-      const opps = await fetch("/api/opportunities").then(r => r.json());
-      setOpportunities(opps);
+      await refresh();
     } catch (e) { setError(e instanceof Error ? e.message : "Unknown error"); }
     finally { setRunning(false); }
   }
 
-  useEffect(() => {
-    Promise.all([fetch("/api/missions"), fetch("/api/opportunities")]).then(async ([m,o]) => {
-      const ms = await m.json(); const os = await o.json();
-      setMission(ms[0] ?? null); setOpportunities(os);
-    }).catch(() => {});
-  }, []);
+  async function approveAndDeploy(asset: Asset) {
+    if (asset.status === "published" && asset.deploymentUrl) return;
+    setBusyAsset(asset.id); setError(""); setNotice("");
+    try {
+      const approval = await fetch("/api/approvals", {
+        method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify({assetId:asset.id})
+      });
+      const approved = await approval.json().catch(() => ({}));
+      if (!approval.ok) throw new Error(approved.error || "Approval failed");
+
+      const deployment = await fetch("/api/deployments", {
+        method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify({assetId:asset.id})
+      });
+      const deployed = await deployment.json().catch(() => ({}));
+      if (!deployment.ok) throw new Error(deployed.error || "Deployment failed");
+
+      setNotice("Website approved and published successfully.");
+      await refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Deployment failed");
+      await refresh().catch(() => {});
+    } finally { setBusyAsset(""); }
+  }
+
+  useEffect(() => { refresh().catch(() => {}); }, []);
+
+  const websiteAssets = useMemo(() => {
+    const map = new Map<string, Asset>();
+    for (const asset of assets) if (asset.type === "website") {
+      const existing = map.get(asset.opportunityId);
+      if (!existing || new Date(asset.createdAt).getTime() > new Date(existing.createdAt).getTime()) map.set(asset.opportunityId, asset);
+    }
+    return map;
+  }, [assets]);
 
   const progress = mission?.progress ?? 0;
 
@@ -43,7 +85,7 @@ export default function Home() {
     <header className="nav">
       <div className="brand"><span className="brand-mark">✦</span> NORTHSTAR</div>
       <div className="status"><span /> AUTONOMOUS CORE ONLINE</div>
-      <button className="ghost" onClick={launch}>Run mission →</button>
+      <button className="ghost" onClick={launch} disabled={running}>Run mission →</button>
     </header>
 
     <section className="hero">
@@ -55,6 +97,7 @@ export default function Home() {
         <button className="secondary" onClick={() => document.querySelector(".opps")?.scrollIntoView({behavior:"smooth"})}>View opportunities</button>
       </div>
       {error && <p className="error">{error}</p>}
+      {notice && <p className="notice">{notice}</p>}
     </section>
 
     <section className="console">
@@ -85,7 +128,32 @@ export default function Home() {
     <section className="opps">
       <div className="section-head"><div><span className="eyebrow">OPPORTUNITY INTELLIGENCE</span><h2>Highest-value signals</h2></div><span>{opportunities.length} STORED</span></div>
       <div className="opportunity-grid">
-        {opportunities.slice(0,6).map(o => <article className="opportunity" key={o.id}><div className="score">{o.score}</div><div><strong>{o.businessName}</strong><span>{o.category} · {o.location}</span></div><small>{o.status.toUpperCase()}</small></article>)}
+        {opportunities.slice(0,6).map(o => {
+          const asset = websiteAssets.get(o.id);
+          const liveUrl = o.deployedWebsiteUrl || asset?.deploymentUrl;
+          return <article className="opportunity" key={o.id}>
+            <div className="score">{o.score}</div>
+            <div className="opportunity-main">
+              <strong>{o.businessName}</strong><span>{o.category} · {o.location}</span>
+              <div className="website-workspace">
+                <div>
+                  <small className="workspace-label">WEBSITE WORKSPACE</small>
+                  <b>{liveUrl ? "LIVE ON VERCEL" : asset ? "WEBSITE ASSET READY" : "NO WEBSITE ASSET"}</b>
+                </div>
+                {liveUrl ? (
+                  <a className="live-link" href={liveUrl} target="_blank" rel="noreferrer">Open live site ↗</a>
+                ) : asset ? (
+                  <button className="publish" onClick={() => approveAndDeploy(asset)} disabled={busyAsset === asset.id}>
+                    {busyAsset === asset.id ? "PUBLISHING…" : asset.status === "ready" ? "PUBLISH TO VERCEL" : "APPROVE & PUBLISH"}
+                  </button>
+                ) : (
+                  <span className="workspace-muted">Generate a website asset to continue</span>
+                )}
+              </div>
+            </div>
+            <small className="opp-status">{o.status.toUpperCase()}</small>
+          </article>;
+        })}
         {!opportunities.length && <div className="empty">No opportunities yet. Launch an autonomous mission.</div>}
       </div>
     </section>

@@ -27,7 +27,7 @@ export async function readDB(): Promise<NorthstarDB> {
     const path = await import("node:path");
     const file = path.join(process.cwd(), ".northstar", "data.json");
     await fs.mkdir(path.dirname(file), {recursive:true});
-    try { return JSON.parse(await fs.readFile(file,"utf8")) as NorthstarDB; }
+    try { return normalize(JSON.parse(await fs.readFile(file,"utf8")) as NorthstarDB); }
     catch { await fs.writeFile(file, JSON.stringify(emptyDB,null,2),"utf8"); return structuredClone(emptyDB); }
   }
   await ensureDB();

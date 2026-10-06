@@ -18,6 +18,7 @@ type EconomicLearningDB=Awaited<ReturnType<typeof readDB>> & {
   economicPriors?:EconomicPrior[];
   strategyObservations?:Array<{variantId:string;opportunityId?:string;leadId?:string;outcome:"pending"|"won"|"lost"|"failed";revenue:number}>;
   strategyVariants?:Array<{id:string;name:string}>;
+  opportunityEconomics?:Array<{opportunityId:string;acquisitionCost:number;executionCost:number}>;
 };
 
 const uid=(prefix:string)=>prefix+"_"+crypto.randomUUID();

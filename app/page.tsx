@@ -1,228 +1,39 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+type Tab="command"|"opportunities"|"websites"|"leads"|"revenue"|"activity";
+type Mission={id:string;objective:string;status:string;progress:number;currentStage:string;updatedAt:string};
+type Opportunity={id:string;businessName:string;category:string;location:string;score:number;signals:string[];status:string;contactEmail?:string;deployedWebsiteUrl?:string};
+type Asset={id:string;opportunityId:string;type:string;title:string;content:string;status:string;deploymentUrl?:string;createdAt:string};
+type Lead={id:string;opportunityId:string;name:string;email?:string;phone?:string;message?:string;status:string};
+type Revenue={id:string;opportunityId?:string;type:string;amount:number;currency:string;note:string;createdAt:string};
+type Deal={id:string;opportunityId:string;leadId?:string;value:number;currency:string;status:string};
+const tabs:[Tab,string][]=[["command","Command"],["opportunities","Opportunities"],["websites","Websites"],["leads","Leads"],["revenue","Revenue"],["activity","Activity"]];
 
-type Mission = { id:string; objective:string; status:string; progress:number; currentStage:string; updatedAt:string };
-type Opportunity = { id:string; businessName:string; website?:string; deployedWebsiteUrl?:string; category:string; location:string; score:number; status:string; contactEmail?:string };
-type Asset = { id:string; opportunityId:string; type:"website"|"offer"|"email"; title:string; content:string; status:"draft"|"ready"|"published"; deploymentUrl?:string; createdAt:string };
-type Lead = { id:string; opportunityId:string; name:string; email?:string; phone?:string; message?:string; status:string; source:string; createdAt:string };
-type RevenueEvent = { id:string; opportunityId?:string; type:string; amount:number; currency:string; note:string; createdAt:string };
-type RevenueAudit = { opportunityId:string; businessName:string; score:number; confidence:number; modeledMonthlyOpportunities:{low:number;high:number}; modeledAnnualRevenue:{low:number;high:number}; assumedDealValue:number; gaps:string[]; actions:string[]; disclaimer:string };
-
-const pillars = [
-  { label:"DISCOVER", title:"Find revenue opportunities", text:"Surface businesses with measurable gaps and rank them by revenue potential." },
-  { label:"BUILD", title:"Create what the opportunity needs", text:"Generate offers and digital assets around the specific opportunity." },
-  { label:"EXECUTE", title:"Move the opportunity toward revenue", text:"Coordinate leads, outreach, follow-up and outcome tracking from one mission." }
-];
-
-export default function Home() {
-  const [running, setRunning] = useState(false);
-  const [mission, setMission] = useState<Mission | null>(null);
-  const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
-  const [assets, setAssets] = useState<Asset[]>([]);
-  const [leads, setLeads] = useState<Lead[]>([]);
-  const [revenue, setRevenue] = useState<RevenueEvent[]>([]);
-  const [busyAsset, setBusyAsset] = useState("");
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
-  const [audits, setAudits] = useState<Record<string, RevenueAudit>>({});
-  const [busyAudit, setBusyAudit] = useState("");
-  const [busyOutreach, setBusyOutreach] = useState("");
-
-  async function refresh() {
-    const [m,o,a,l,r] = await Promise.all([
-      fetch("/api/missions", {cache:"no-store"}),
-      fetch("/api/opportunities", {cache:"no-store"}),
-      fetch("/api/assets", {cache:"no-store"}),
-      fetch("/api/leads", {cache:"no-store"}),
-      fetch("/api/revenue", {cache:"no-store"})
-    ]);
-    if (![m,o,a,l,r].every(x => x.ok)) throw new Error("Workspace refresh failed");
-    const [ms, os, as, ls, rs] = await Promise.all([m.json(), o.json(), a.json(), l.json(), r.json()]);
-    setMission(ms[0] ?? null); setOpportunities(os); setAssets(as); setLeads(ls); setRevenue(rs);
-  }
-
-  async function launch() {
-    setRunning(true); setError(""); setNotice("");
-    try {
-      const res = await fetch("/api/missions", { method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify({ objective:"Find and pursue the highest-value next revenue opportunity." }) });
-      if (!res.ok) throw new Error("Mission launch failed");
-      const data = await res.json();
-      setMission(data);
-      await refresh();
-    } catch (e) { setError(e instanceof Error ? e.message : "Unknown error"); }
-    finally { setRunning(false); }
-  }
-
-  async function runRevenueAudit(opportunityId: string) {
-    setBusyAudit(opportunityId); setError(""); setNotice("");
-    try {
-      const res = await fetch(`/api/revenue-audits?opportunityId=${encodeURIComponent(opportunityId)}`, {cache:"no-store"});
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || "Revenue audit failed");
-      setAudits(current => ({...current, [opportunityId]: data}));
-    } catch (e) { setError(e instanceof Error ? e.message : "Revenue audit failed"); }
-    finally { setBusyAudit(""); }
-  }
-
-  async function approveAndSend(asset: Asset) {
-    setBusyOutreach(asset.id); setError(""); setNotice("");
-    try {
-      const approval = await fetch("/api/approvals", {method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({assetId:asset.id,action:"send_email"})});
-      const approved = await approval.json().catch(() => ({}));
-      if (!approval.ok) throw new Error(approved.error || "Approval failed");
-      const send = await fetch("/api/outreach/send", {method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({assetId:asset.id})});
-      const result = await send.json().catch(() => ({}));
-      if (!send.ok) throw new Error(result.error || "Outbound send failed");
-      setNotice("Approved outreach sent successfully.");
-      await refresh();
-    } catch (e) { setError(e instanceof Error ? e.message : "Outbound send failed"); await refresh().catch(() => {}); }
-    finally { setBusyOutreach(""); }
-  }
-
-  async function approveAndDeploy(asset: Asset) {
-    if (asset.status === "published" && asset.deploymentUrl) return;
-    setBusyAsset(asset.id); setError(""); setNotice("");
-    try {
-      const approval = await fetch("/api/approvals", {
-        method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify({assetId:asset.id})
-      });
-      const approved = await approval.json().catch(() => ({}));
-      if (!approval.ok) throw new Error(approved.error || "Approval failed");
-
-      const deployment = await fetch("/api/deployments", {
-        method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify({assetId:asset.id})
-      });
-      const deployed = await deployment.json().catch(() => ({}));
-      if (!deployment.ok) throw new Error(deployed.error || "Deployment failed");
-
-      setNotice("Website approved and published successfully.");
-      await refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Deployment failed");
-      await refresh().catch(() => {});
-    } finally { setBusyAsset(""); }
-  }
-
-  useEffect(() => { refresh().catch(() => {}); }, []);
-
-  const emailAssets = useMemo(() => {
-    const map = new Map<string, Asset>();
-    for (const asset of assets) if (asset.type === "email") {
-      const existing = map.get(asset.opportunityId);
-      if (!existing || new Date(asset.createdAt).getTime() > new Date(existing.createdAt).getTime()) map.set(asset.opportunityId, asset);
-    }
-    return map;
-  }, [assets]);
-
-  const websiteAssets = useMemo(() => {
-    const map = new Map<string, Asset>();
-    for (const asset of assets) if (asset.type === "website") {
-      const existing = map.get(asset.opportunityId);
-      if (!existing || new Date(asset.createdAt).getTime() > new Date(existing.createdAt).getTime()) map.set(asset.opportunityId, asset);
-    }
-    return map;
-  }, [assets]);
-
-  const progress = mission?.progress ?? 0;
-
-  return <main className="shell">
-    <header className="nav">
-      <div className="brand"><span className="brand-mark">✦</span> NORTHSTAR</div>
-      <div className="status"><span /> AUTONOMOUS CORE ONLINE</div>
-      <button className="ghost" onClick={launch} disabled={running}>Run mission →</button>
-    </header>
-
-    <section className="hero">
-      <div className="eyebrow">AI REVENUE OPERATOR / LIVE SYSTEM</div>
-      <h1>Your business gets an<br /><em>AI operator.</em> Not another dashboard.</h1>
-      <p className="hero-copy">Northstar discovers opportunities, builds what is needed to pursue them, executes the revenue workflow, and records the outcome.</p>
-      <div className="actions">
-        <button className="primary" onClick={launch} disabled={running}>{running ? "EXECUTING MISSION…" : "LAUNCH AUTONOMOUS RUN"} <span>↗</span></button>
-        <button className="secondary" onClick={() => document.querySelector(".opps")?.scrollIntoView({behavior:"smooth"})}>View opportunities</button>
-      </div>
-      {error && <p className="error">{error}</p>}
-      {notice && <p className="notice">{notice}</p>}
-    </section>
-
-    <section className="console">
-      <div className="console-head"><div><span className="live-dot" /> LIVE AGENT CONSOLE</div><span>MISSION / {mission?.id ?? "READY"}</span></div>
-      <div className="console-body">
-        <div className="mission">
-          <span className="label">CURRENT OBJECTIVE</span>
-          <strong>{mission?.objective ?? "Find and pursue the highest-value next opportunity."}</strong>
-          <div className="progress"><i style={{width: progress + "%"}} /></div>
-          <small>{mission ? mission.currentStage.toUpperCase() + " · " + progress + "% · " + mission.status.toUpperCase() : "Awaiting mission launch"}</small>
-        </div>
-        <div className="events">
-          {(mission ? [
-            ["NOW","MISSION", mission.currentStage + " stage completed"],
-            ["LIVE","DISCOVERY", opportunities.length + " opportunities persisted"],
-            ["BUILD","ASSET", "Revenue recovery offers generated"],
-            ["DATA","STORE", "Mission state written to local persistence"]
-          ] : [
-            ["READY","CORE","Mission engine initialized"],
-            ["READY","STORE","Persistent state store available"],
-            ["READY","DISCOVERY","Opportunity scoring engine available"],
-            ["READY","EXECUTE","Launch a mission to begin"]
-          ]).map(([time,type,message]) => <div className="event" key={time+type}><time>{time}</time><b>{type}</b><span>{message}</span></div>)}
-        </div>
-      </div>
-    </section>
-
-    <section className="opps">
-      <div className="section-head"><div><span className="eyebrow">OPPORTUNITY INTELLIGENCE</span><h2>Highest-value signals</h2></div><span>{opportunities.length} STORED</span></div>
-      <div className="opportunity-grid">
-        {opportunities.slice(0,6).map(o => {
-          const asset = websiteAssets.get(o.id);
-          const liveUrl = o.deployedWebsiteUrl || asset?.deploymentUrl;
-          return <article className="opportunity" key={o.id}>
-            <div className="score">{o.score}</div>
-            <div className="opportunity-main">
-              <strong>{o.businessName}</strong><span>{o.category} · {o.location}</span>
-              <div className="audit-workspace">
-                <div>
-                  <small className="workspace-label">REVENUE AUDIT</small>
-                  <b>{audits[o.id] ? `MODELED ${Math.round(audits[o.id].modeledAnnualRevenue.low / 1000)}K–${Math.round(audits[o.id].modeledAnnualRevenue.high / 1000)}K / YEAR` : "NOT YET MODELED"}</b>
-                </div>
-                <button className="audit-button" onClick={() => runRevenueAudit(o.id)} disabled={busyAudit === o.id}>
-                  {busyAudit === o.id ? "ANALYZING…" : audits[o.id] ? "REFRESH AUDIT" : "RUN REVENUE AUDIT"}
-                </button>
-              </div>
-              {audits[o.id] && <div className="audit-result"><span>{audits[o.id].confidence}% confidence</span><span>{audits[o.id].modeledMonthlyOpportunities.low}–{audits[o.id].modeledMonthlyOpportunities.high} modeled opportunities/mo</span><span>Assumed deal value ${audits[o.id].assumedDealValue.toLocaleString()}</span></div>}
-              <div className="audit-workspace">
-                <div>
-                  <small className="workspace-label">OUTBOUND</small>
-                  <b>{emailAssets.get(o.id) ? (emailAssets.get(o.id)?.status === "published" ? "OUTREACH SENT" : "OUTREACH READY") : "NO OUTREACH DRAFT"}</b>
-                </div>
-                {emailAssets.get(o.id) ? <button className="audit-button" onClick={() => approveAndSend(emailAssets.get(o.id)!)} disabled={busyOutreach === emailAssets.get(o.id)!.id}>
-                  {busyOutreach === emailAssets.get(o.id)!.id ? "SENDING…" : emailAssets.get(o.id)!.status === "published" ? "SENT" : "APPROVE & SEND"}
-                </button> : <span className="workspace-muted">{o.contactEmail ? "AI draft will be prepared when configured" : "No public contact email"}</span>}
-              </div>
-              <div className="website-workspace">
-                <div>
-                  <small className="workspace-label">WEBSITE WORKSPACE</small>
-                  <b>{liveUrl ? "LIVE ON VERCEL" : asset ? "WEBSITE ASSET READY" : "NO WEBSITE ASSET"}</b>
-                </div>
-                {liveUrl ? (
-                  <a className="live-link" href={liveUrl} target="_blank" rel="noreferrer">Open live site ↗</a>
-                ) : asset ? (
-                  <button className="publish" onClick={() => approveAndDeploy(asset)} disabled={busyAsset === asset.id}>
-                    {busyAsset === asset.id ? "PUBLISHING…" : asset.status === "ready" ? "PUBLISH TO VERCEL" : "APPROVE & PUBLISH"}
-                  </button>
-                ) : (
-                  <span className="workspace-muted">Generate a website asset to continue</span>
-                )}
-              </div>
-            </div>
-            <small className="opp-status">{o.status.toUpperCase()}</small>
-          </article>;
-        })}
-        {!opportunities.length && <div className="empty">No opportunities yet. Launch an autonomous mission.</div>}
-      </div>
-    </section>
-
-    <section className="pillars">{pillars.map(p => <article key={p.label}><span>{p.label}</span><h2>{p.title}</h2><p>{p.text}</p></article>)}</section>
-    <footer><span>NORTHSTAR / AUTONOMOUS BUSINESS EXECUTION</span><span>PERSISTENCE · MISSIONS · OPPORTUNITIES · REVENUE</span></footer>
-  </main>;
+export default function Home(){
+ const [tab,setTab]=useState<Tab>("command"),[mission,setMission]=useState<Mission|null>(null),[missions,setMissions]=useState<Mission[]>([]),[opportunities,setOpportunities]=useState<Opportunity[]>([]),[assets,setAssets]=useState<Asset[]>([]),[leads,setLeads]=useState<Lead[]>([]),[revenue,setRevenue]=useState<Revenue[]>([]),[deals,setDeals]=useState<Deal[]>([]);
+ const [busy,setBusy]=useState(""),[error,setError]=useState(""),[notice,setNotice]=useState("");
+ async function refresh(){const r=await Promise.all(["/api/missions","/api/opportunities","/api/assets","/api/leads","/api/revenue"].map(x=>fetch(x,{cache:"no-store"})));if(!r.every(x=>x.ok))throw Error("Workspace refresh failed");const [m,o,a,l,v]=await Promise.all(r.map(x=>x.json()));setMissions(m);setMission(m[0]||null);setOpportunities(o);setAssets(a);setLeads(l);setRevenue(v)}
+ async function launch(){setBusy("mission");setError("");try{const r=await fetch("/api/missions",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({objective:"Find and pursue the highest-value next revenue opportunity."})});const m=await r.json();if(!r.ok)throw Error(m.error);setMission(m);setNotice("Mission queued. Discovery is running.");fetch("/api/missions/run",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({missionId:m.id})}).catch(()=>{});for(let i=0;i<20;i++){await new Promise(x=>setTimeout(x,1000));await refresh().catch(()=>{});const ms=await fetch("/api/missions",{cache:"no-store"}).then(x=>x.json()).catch(()=>[]);const cur=ms.find((x:Mission)=>x.id===m.id);if(cur)setMission(cur);if(cur?.status==="completed"||cur?.status==="failed")break}}catch(e){setError(e instanceof Error?e.message:"Mission failed")}finally{setBusy("")}}
+ async function post(url:string,body:any,key:string,msg:string){setBusy(key);setError("");try{const r=await fetch(url,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)});const d=await r.json().catch(()=>({}));if(!r.ok)throw Error(d.error||"Action failed");setNotice(msg);await refresh()}catch(e){setError(e instanceof Error?e.message:"Action failed")}finally{setBusy("")}}
+ async function build(o:string,a:"website"|"offer"|"outreach"){await post("/api/operator",{opportunityId:o,action:a},o+a,a==="website"?"Website built.":a==="offer"?"Offer built.":"Outreach draft built.")}
+ async function audit(o:string){setBusy(o+"audit");try{const r=await fetch("/api/revenue-audits?opportunityId="+encodeURIComponent(o));const d=await r.json();if(!r.ok)throw Error(d.error);setNotice("Revenue audit complete.");setAuditData(x=>({...x,[o]:d}))}catch(e){setError(e instanceof Error?e.message:"Audit failed")}finally{setBusy("")}}
+ const [auditData,setAuditData]=useState<Record<string,any>>({});
+ async function publish(a:Asset){setBusy(a.id);try{let r=await fetch("/api/approvals",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({assetId:a.id,action:"publish"})});let d=await r.json();if(!r.ok)throw Error(d.error);r=await fetch("/api/deployments",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({assetId:a.id}));d=await r.json();if(!r.ok)throw Error(d.error);setNotice("Website published.");await refresh()}catch(e){setError(e instanceof Error?e.message:"Publish failed")}finally{setBusy("")}}
+ async function respond(id:string){await post("/api/execution",{action:"respond",leadId:id},id+"r","AI response drafted. Review before sending.")}
+ async function meeting(l:Lead){await post("/api/execution",{action:"appointment",leadId:l.id,startsAt:new Date(Date.now()+86400000).toISOString()},l.id+"m","Appointment recorded.")}
+ async function deal(l:Lead){const v=prompt("Deal value (USD)","2000");if(v)await post("/api/execution",{action:"deal",leadId:l.id,opportunityId:l.opportunityId,value:Number(v)},l.id+"d","Deal created.")}
+ async function won(d:Deal){await post("/api/execution",{action:"close_deal",dealId:d.id,status:"won"},d.id+"w","Deal closed-won and attributed.")}
+ useEffect(()=>{refresh().catch(e=>setError(e.message))},[]);
+ const websites=assets.filter(a=>a.type==="website"),wonRevenue=revenue.filter(x=>x.type==="won"||x.type==="payment").reduce((n,x)=>n+x.amount,0),pipeline=revenue.filter(x=>x.type==="pipeline").reduce((n,x)=>n+x.amount,0);
+ return <main className="shell"><header className="nav"><div className="brand"><span className="brand-mark">✦</span>NORTHSTAR</div><div className="status"><span/>AUTONOMOUS CORE ONLINE</div><button className="ghost" onClick={launch} disabled={!!busy}>{busy==="mission"?"RUNNING…":"RUN MISSION →"}</button></header>
+ <nav className="product-nav">{tabs.map(([id,label])=><button key={id} className={tab===id?"active":""} onClick={()=>setTab(id)}>{label}</button>)}</nav>
+ {error&&<div className="global-error">{error}</div>}{notice&&<div className="global-notice">{notice}</div>}
+ {tab==="command"&&<section className="workspace"><span className="eyebrow">REVENUE EXECUTION ENGINE</span><h1>From opportunity to <em>revenue.</em></h1><p className="hero-copy">Discover → audit → build → capture → respond → meet → close → attribute.</p><div className="command-grid"><div className="command-card"><small>MISSION</small><strong>{mission?.status?.toUpperCase()||"READY"}</strong><span>{mission?.currentStage||"Awaiting execution"}</span><div className="progress"><i style={{width:(mission?.progress||0)+"%"}}/></div><button className="primary" onClick={launch}>START MISSION</button></div><div className="command-card"><small>OPPORTUNITIES</small><strong>{opportunities.length}</strong><span>ranked business signals</span><button className="secondary" onClick={()=>setTab("opportunities")}>OPEN →</button></div><div className="command-card"><small>ATTRIBUTED REVENUE</small><strong>{"$"}{wonRevenue.toLocaleString()}</strong><span>{"$"}{pipeline.toLocaleString()} pipeline</span><button className="secondary" onClick={()=>setTab("revenue")}>OPEN →</button></div></div><div className="execution-loop">{["DISCOVER","AUDIT","BUILD","RESPOND","CLOSE"].map((x,i)=><div key={x}><b>0{i+1} {x}</b><span>{["Find real businesses.","Quantify the revenue gap.","Create the required assets.","Handle inbound demand.","Prove the money generated."][i]}</span></div>)}</div></section>}
+ {tab==="opportunities"&&<section className="workspace"><div className="section-head"><div><span className="eyebrow">OPPORTUNITY INTELLIGENCE</span><h2>Businesses Northstar can pursue</h2></div><button className="secondary" onClick={launch}>RUN NEW SCAN</button></div><div className="opportunity-grid">{opportunities.map(o=><article className="opportunity" key={o.id}><div className="score">{o.score}</div><div className="opportunity-main"><strong>{o.businessName}</strong><span>{o.category} · {o.location}</span><div className="signal-row">{(o.signals||[]).slice(0,3).map(s=><span key={s}>{s}</span>)}</div><div className="action-row"><button className="audit-button" onClick={()=>audit(o.id)}>{busy===o.id+"audit"?"ANALYZING…":"REVENUE AUDIT"}</button><button className="audit-button" onClick={()=>build(o.id,"website")}>BUILD WEBSITE</button><button className="audit-button" onClick={()=>build(o.id,"offer")}>BUILD OFFER</button>{o.contactEmail&&<button className="audit-button" onClick={()=>build(o.id,"outreach")}>DRAFT OUTREACH</button>}</div>{auditData[o.id]&&<div className="audit-result"><b>{auditData[o.id].confidence}% confidence</b><span>{"$"}{auditData[o.id].modeledAnnualRevenue.low.toLocaleString()}–{"$"}{auditData[o.id].modeledAnnualRevenue.high.toLocaleString()} modeled annual upside</span></div>}</div><small className="opp-status">{o.status.toUpperCase()}</small></article>)}{!opportunities.length&&<div className="empty">Run a mission to discover businesses.</div>}</div></section>}
+ {tab==="websites"&&<section className="workspace"><div className="section-head"><div><span className="eyebrow">WEBSITE FACTORY</span><h2>Assets and deployments</h2></div></div><div className="asset-grid">{websites.map(a=><article className="asset-card" key={a.id}><small>{opportunities.find(o=>o.id===a.opportunityId)?.businessName||"Opportunity"}</small><strong>{a.title}</strong><span>{a.status.toUpperCase()}</span>{a.deploymentUrl?<a className="live-link" href={a.deploymentUrl} target="_blank">OPEN LIVE SITE ↗</a>:<button className="publish" onClick={()=>publish(a)}>{busy===a.id?"PUBLISHING…":"APPROVE & PUBLISH"}</button>}</article>)}{!websites.length&&<div className="empty">No website assets. Build one from Opportunities.</div>}</div></section>}
+ {tab==="leads"&&<section className="workspace"><div className="section-head"><div><span className="eyebrow">REVENUE EXECUTION</span><h2>Lead → response → meeting → deal</h2></div><span>{leads.length} LEADS</span></div><div className="lead-list">{leads.map(l=><article className="lead-card" key={l.id}><div><strong>{l.name}</strong><span>{l.email||l.phone||"No contact"}</span><small>{opportunities.find(o=>o.id===l.opportunityId)?.businessName||"Opportunity"}</small></div><b>{l.status.toUpperCase()}</b><p>{l.message||"No message supplied."}</p><div className="action-row"><button className="audit-button" onClick={()=>respond(l.id)}>AI RESPONSE</button><button className="audit-button" onClick={()=>meeting(l)}>RECORD MEETING</button><button className="audit-button" onClick={()=>deal(l)}>CREATE DEAL</button>{deals.filter(d=>d.leadId===l.id).map(d=><button key={d.id} className="publish" onClick={()=>won(d)} disabled={d.status==="won"}>{d.status==="won"?"WON":"CLOSE WON"}</button>)}</div></article>)}{!leads.length&&<div className="empty">No leads yet. Publish a website and submit its lead form.</div>}</div></section>}
+ {tab==="revenue"&&<section className="workspace"><span className="eyebrow">ATTRIBUTION</span><h2>Revenue generated, not activity</h2><div className="metric-grid"><div><small>WON</small><strong>{"$"}{wonRevenue.toLocaleString()}</strong></div><div><small>PIPELINE</small><strong>{"$"}{pipeline.toLocaleString()}</strong></div><div><small>LEADS</small><strong>{leads.length}</strong></div><div><small>WON DEALS</small><strong>{deals.filter(d=>d.status==="won").length}</strong></div></div><div className="revenue-list">{revenue.map(r=><article key={r.id}><b>{r.type.toUpperCase()}</b><strong>{r.currency} {r.amount.toLocaleString()}</strong><span>{r.note}</span></article>)}</div></section>}
+ {tab==="activity"&&<section className="workspace"><span className="eyebrow">EXECUTION HISTORY</span><h2>What Northstar actually did</h2><div className="mission-list">{missions.map(m=><article key={m.id}><b>{m.status.toUpperCase()}</b><strong>{m.objective}</strong><span>{m.currentStage} · {m.progress}%</span><small>{new Date(m.updatedAt).toLocaleString()}</small></article>)}</div></section>}
+ <footer><span>NORTHSTAR / REVENUE EXECUTION ENGINE</span><span>DISCOVER · BUILD · RESPOND · CLOSE · MEASURE</span></footer></main>
 }

@@ -1,0 +1,5 @@
+.next/
+node_modules/
+.northstar/
+.env
+.env.local

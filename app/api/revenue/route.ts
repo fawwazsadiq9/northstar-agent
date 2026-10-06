@@ -6,7 +6,7 @@ export async function GET() {
   const db = await readDB();
   const won = db.revenue.filter(x => x.type === "won" || x.type === "payment").reduce((n, x) => n + x.amount, 0);
   const pipeline = db.revenue.filter(x => x.type === "pipeline").reduce((n, x) => n + x.amount, 0);
-  return NextResponse.json({ events: db.revenue, won, pipeline });
+  return NextResponse.json(db.revenue);
 }
 
 export async function POST(request: Request) {

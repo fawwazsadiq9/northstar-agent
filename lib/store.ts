@@ -12,7 +12,7 @@ async function ensureDB() {
     data JSONB NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`;
-  await sql`INSERT INTO northstar_state (id,data) VALUES (1, ${sql.json(emptyDB)}) ON CONFLICT (id) DO NOTHING`;
+  await sql`INSERT INTO northstar_state (id,data) VALUES (1, ${sql.json(emptyDB as any)}) ON CONFLICT (id) DO NOTHING`;
 }
 
 function normalize(db: NorthstarDB): NorthstarDB {
@@ -45,7 +45,7 @@ export async function writeDB(db: NorthstarDB) {
     return;
   }
   await ensureDB();
-  await sql`UPDATE northstar_state SET data=${sql.json(db)}, updated_at=NOW() WHERE id=1`;
+  await sql`UPDATE northstar_state SET data=${sql.json(db as any)}, updated_at=NOW() WHERE id=1`;
 }
 
 export async function updateDB<T>(fn:(db:NorthstarDB)=>T|Promise<T>):Promise<T> {
@@ -55,7 +55,7 @@ export async function updateDB<T>(fn:(db:NorthstarDB)=>T|Promise<T>):Promise<T> 
     const rows = await tx`SELECT data FROM northstar_state WHERE id=1 FOR UPDATE`;
     const db = (rows[0]?.data as NorthstarDB) || structuredClone(emptyDB);
     const result = await fn(db);
-    await tx`UPDATE northstar_state SET data=${tx.json(db)}, updated_at=NOW() WHERE id=1`;
+    await tx`UPDATE northstar_state SET data=${tx.json(db as any)}, updated_at=NOW() WHERE id=1`;
     return result;
   }) as Promise<T>;
 }

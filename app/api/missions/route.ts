@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createMission, runMission } from "../../../lib/mission";
+import { createMission } from "../../../lib/mission";
 import { readDB } from "../../../lib/store";
 
 export async function GET() {
@@ -13,6 +13,5 @@ export async function POST(request: Request) {
     ? body.objective.trim()
     : "Find and pursue the highest-value next revenue opportunity.";
   const mission = await createMission(objective);
-  const completed = await runMission(mission.id);
-  return NextResponse.json(completed, { status: 201 });
+  return NextResponse.json(mission, { status: 201 });
 }

@@ -1,7 +1,12 @@
 import type { Opportunity } from "./types";
 
 function escape(value: string) {
-  return value.replace(/[&<>"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]!);
+  return value.replace(/[&<>"]/g, c => {
+    if (c === "&") return "&amp;";
+    if (c === "<") return "&lt;";
+    if (c === ">") return "&gt;";
+    return "&quot;";
+  });
 }
 
 export function fallbackWebsite(opportunity: Opportunity) {

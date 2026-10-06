@@ -8,9 +8,9 @@ function clean(value: unknown, max: number) {
   return typeof value === "string" ? value.trim().slice(0, max) : "";
 }
 
-export async function POST(request: Request) {
+function cors(response: NextResponse) {\n  const origin = process.env.NORTHSTAR_PUBLIC_ALLOWED_ORIGIN || "*";\n  response.headers.set("Access-Control-Allow-Origin", origin);\n  response.headers.set("Access-Control-Allow-Headers", "content-type");\n  response.headers.set("Access-Control-Allow-Methods", "POST, OPTIONS");\n  return response;\n}\n\nexport async function OPTIONS() { return cors(new NextResponse(null, { status: 204 })); }\n\nexport async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
-  if (clean(body.company, 100)) return NextResponse.json({ accepted: true });
+  if (clean(body.company, 100)) return cors(NextResponse.json({ accepted: true }));
 
   const opportunityId = clean(body.opportunityId, 120);
   const name = clean(body.name, 120);
@@ -19,7 +19,7 @@ export async function POST(request: Request) {
   const message = clean(body.message, 2000);
 
   if (!opportunityId || !name || !email || !email.includes("@")) {
-    return NextResponse.json({ error: "opportunityId, name and valid email are required" }, { status: 400 });
+    return cors(NextResponse.json({ error: "opportunityId, name and valid email are required" }, { status: 400 }));
   }
 
   const now = new Date().toISOString();
@@ -45,8 +45,8 @@ export async function POST(request: Request) {
       opportunityId,
       source: saved.source
     });
-    return NextResponse.json({ accepted: true, leadId: saved.id }, { status: 201 });
+    return cors(NextResponse.json({ accepted: true, leadId: saved.id }, { status: 201 }));
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Lead intake failed" }, { status: 404 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Lead intake failed" }, { status: 404 }));
   }
 }

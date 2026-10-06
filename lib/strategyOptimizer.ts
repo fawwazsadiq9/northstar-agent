@@ -34,6 +34,9 @@ export async function selectContextualStrategy(missionId: string, action: string
     channel: channelVariants(action),
   };
   const experiment = await ensureExperiment(missionId, context);
+  const learningDB = await readDB() as Awaited<ReturnType<typeof readDB>> & { strategyPlaybooks?: Array<{key:string;recommendedVariantId:string;confidence:number}> };
+  const playbookKey = [context.industry,context.geography,context.opportunityType,context.leadStage,context.channel].map(x=>x.trim().toLowerCase()).join("|");
+  const playbook = learningDB.strategyPlaybooks?.find(p=>p.key===playbookKey && p.confidence>=0.5);
   const performance = (await strategyPerformance()).filter(x => experiment.variants.includes(x.variant.id));
   const total = performance.reduce((sum, x) => sum + x.resolved, 0);
   const prior = 1;
@@ -43,7 +46,8 @@ export async function selectContextualStrategy(missionId: string, action: string
     const exploration = Math.sqrt((2 * Math.log(Math.max(2, total + 1))) / Math.max(1, x.resolved));
     return { x, score: mean + exploration };
   }).sort((a, b) => b.score - a.score);
-  const chosen = scored[0];
+  const playbookVariant = playbook ? scored.find(s=>s.x.variant.id===playbook.recommendedVariantId) : undefined;
+  const chosen = playbookVariant || scored[0];
   if (!chosen) return null;
   const minResolved = Math.min(...performance.map(x => x.resolved));
   const variant = chosen.x.variant;
@@ -56,7 +60,9 @@ export async function selectContextualStrategy(missionId: string, action: string
     exploration,
     confidence,
     score: chosen.score,
-    rationale: exploration
+    rationale: playbookVariant
+      ? `Using the proven contextual playbook recommendation ${variant.name}.`
+      : exploration
       ? `Exploring ${variant.name} because contextual evidence is still sparse or its upper-confidence score leads the field.`
       : `Exploiting ${variant.name} because it has the strongest contextual outcome estimate.`,
   };

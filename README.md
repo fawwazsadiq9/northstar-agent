@@ -21,3 +21,5 @@ Discover opportunities → quantify revenue gaps → build assets → obtain app
 Copy `.env.example` into the deployment environment and configure the required provider credentials.
 
 Northstar intentionally keeps external side effects behind explicit approval boundaries.
+
+<!-- ci validation 3 -->

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createMission } from "../../../lib/mission";
 import { readDB } from "../../../lib/store";
+import { enqueueJob } from "../../../lib/controlPlane";
 
 export async function GET() {
   const db = await readDB();
@@ -13,5 +14,6 @@ export async function POST(request: Request) {
     ? body.objective.trim()
     : "Find and pursue the highest-value next revenue opportunity.";
   const mission = await createMission(objective);
-  return NextResponse.json(mission, { status: 201 });
+  const job = await enqueueJob({kind:"mission",missionId:mission.id,payload:{objective},idempotencyKey:`mission:${mission.id}`,maxAttempts:3,runAfter:new Date().toISOString()});
+  return NextResponse.json({...mission,jobId:job.id}, { status: 201 });
 }

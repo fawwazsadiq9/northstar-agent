@@ -3,6 +3,10 @@
     {
       "path": "/api/followups",
       "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/control-plane/recover",
+      "schedule": "30 9 * * *"
     }
   ]
 }

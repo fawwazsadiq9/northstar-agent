@@ -34,7 +34,7 @@ export async function optimizeEconomicPortfolio(limit=25):Promise<EconomicPortfo
     const explore=!evidence||evidence.confidence<.5||!evidence.credible;
     const marginalROI=m.expectedValue/Math.max(.01,spend);
     const contextUse=usedContexts.get(contextKey)||0;
-    if(contextUse>=num("NORTHSTAR_CONTEXT_CAPACITY",3)&&marginalROI<Math.max(1,portfolio.marginalROI||0))continue;
+    if(contextUse>=num("NORTHSTAR_CONTEXT_CAPACITY",3)&&marginalROI<1)continue;
     if(explore&&explorationAllocated+spend>explorationBudget)continue;
     allocations.push({opportunityId:m.opportunityId,businessName:m.businessName,expectedValue:m.expectedValue,expectedCashVelocity:m.expectedCashVelocity,spend,allocation:explore?"explore":"exploit",marginalROI,economicScore:m.economicScore,rationale:[explore?"Evidence is insufficient, so this allocation buys information as well as expected value.":"Evidence supports exploiting the learned economic pattern.","Selection maximizes expected value per unit of scarce execution budget.","Repeated allocation to the same context is capped to reduce cannibalization."]});
     allocated+=spend;expectedCashGenerated+=Math.max(0,m.expectedRevenue);expectedRegret+=Math.max(0,m.expectedValue)*(explore?.25:.1);usedContexts.set(contextKey,contextUse+1);if(explore)explorationAllocated+=spend;

@@ -4,7 +4,7 @@ import { recordDecision, attachDecisionJob, getDecisionLearning } from "./decisi
 import { strategyPerformance } from "./strategy";
 import { selectContextualStrategy } from "./strategyOptimizer";
 import { scoreOpportunity } from "./economicOptimizer";
-import { getMultiPeriodCapitalPlan, optimizeMultiPeriodCapital } from "./multiPeriodCapital";
+import { getMultiPeriodCapitalPlan, optimizeMultiPeriodCapital, type MultiPeriodPlan } from "./multiPeriodCapital";
 import { replanMission } from "./closedLoop";
 
 export type DecisionAction = "discover"|"build"|"outreach"|"follow_up"|"measurement"|"recover"|"wait"|"approve";
@@ -13,6 +13,11 @@ export interface Decision { missionId:string; selected?:DecisionCandidate; candi
 
 function hasPendingJob(jobs:AgentJob[], missionId:string, kind:JobKind, opportunityId?:string) {
   return jobs.some(j=>j.missionId===missionId && j.kind===kind && ["queued","running","retrying","blocked"].includes(j.status) && (!opportunityId || j.opportunityId===opportunityId));
+}
+
+async function rollingPlan(missionId:string):Promise<MultiPeriodPlan> {
+  const existing=await getMultiPeriodCapitalPlan(missionId);
+  return existing ?? optimizeMultiPeriodCapital(missionId);
 }
 
 export async function decideNextAction(missionId:string):Promise<Decision> {
@@ -32,7 +37,7 @@ export async function decideNextAction(missionId:string):Promise<Decision> {
 
   const fresh=db.opportunities.filter(o=>o.status==="new"&&!db.leads.some(l=>l.opportunityId===o.id));
   if(fresh.length&&!hasPendingJob(jobs,missionId,"build")) {
-    const rolling=(await getMultiPeriodCapitalPlan(missionId)) || (await optimizeMultiPeriodCapital(missionId));
+    const rolling=await rollingPlan(missionId);
     const ranked={ranked:rolling.allocations.map(a=>({opportunityId:a.opportunityId,economicScore:Math.min(100,a.score),expectedValue:a.expectedValue,expectedCashVelocity:a.expectedCash,strategyVariantId:a.strategyVariantId,period:a.period,exploration:a.exploration}))};
     const allowed=new Set(ranked.ranked.map(x=>x.opportunityId));
     const best=fresh.filter(o=>allowed.has(o.id)).sort((a,b)=>{

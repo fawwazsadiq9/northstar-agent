@@ -4,6 +4,7 @@ import { recordDecision, attachDecisionJob, getDecisionLearning } from "./decisi
 import { strategyPerformance } from "./strategy";
 import { selectContextualStrategy } from "./strategyOptimizer";
 import { rankOpportunities, scoreOpportunity } from "./economicOptimizer";
+import { optimizeEconomicPortfolio } from "./portfolioOptimizer";
 
 export type DecisionAction = "discover"|"build"|"outreach"|"follow_up"|"measurement"|"recover"|"wait"|"approve";
 export interface DecisionCandidate { action:DecisionAction; score:number; reason:string; jobKind?:JobKind; opportunityId?:string; leadId?:string; requiresApproval?:boolean; }
@@ -29,7 +30,8 @@ export async function decideNextAction(missionId:string):Promise<Decision> {
 
   const fresh=db.opportunities.filter(o=>o.status==="new"&&!db.leads.some(l=>l.opportunityId===o.id));
   if(fresh.length&&!hasPendingJob(jobs,missionId,"build")) {
-    const ranked=await rankOpportunities(10);
+    const portfolio=await optimizeEconomicPortfolio(10);
+    const ranked={ranked:portfolio.allocations.map(a=>({opportunityId:a.opportunityId,economicScore:a.economicScore,expectedValue:a.expectedValue,expectedCashVelocity:a.expectedCashVelocity}))};
     const allowed=new Set(ranked.ranked.map(x=>x.opportunityId));
     const best=fresh.filter(o=>allowed.has(o.id)).sort((a,b)=>{
       const ae=ranked.ranked.find(x=>x.opportunityId===a.id)?.economicScore||0;

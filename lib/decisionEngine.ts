@@ -58,7 +58,7 @@ export async function decideNextAction(missionId:string):Promise<Decision> {
 
   const withEmail=db.opportunities.filter(o=>o.contactEmail&&o.status==="qualified");
   if(withEmail.length&&!hasPendingJob(jobs,missionId,"outreach")) {
-    const rolling=await (getMultiPeriodCapitalPlan(missionId) || optimizeMultiPeriodCapital(missionId));
+    const rolling=await rollingPlan(missionId);
     const ranked=rolling.allocations.filter(a=>withEmail.some(o=>o.id===a.opportunityId));
     const best=ranked.sort((a,b)=>b.score-a.score)[0];
     if(best){
@@ -87,7 +87,7 @@ export async function executeDecision(missionId:string):Promise<Decision> {
   const baselineWonRevenue=db.revenue.filter(r=>r.type==="won").reduce((s,r)=>s+r.amount,0);
   const memory=await recordDecision({missionId,action:c?.action||"wait",score:c?.score||0,reason:c?.reason||"No action",candidateActions:decision.candidates.map(x=>x.action),selected:true,opportunityId:c?.opportunityId,leadId:c?.leadId,baselineWonRevenue,outcome:"pending",reward:0,revenueDelta:0});
   if(!c||!c.jobKind||c.requiresApproval) return {...decision,decisionId:memory.id};
-  const rolling= c.opportunityId ? (await (getMultiPeriodCapitalPlan(missionId) || optimizeMultiPeriodCapital(missionId))).allocations.find(a=>a.opportunityId===c.opportunityId) : undefined;
+  const rolling= c.opportunityId ? (await rollingPlan(missionId)).allocations.find(a=>a.opportunityId===c.opportunityId) : undefined;
   const strategy=(c.action==="build"||c.action==="outreach"||c.action==="follow_up") ? await selectContextualStrategy(missionId,c.action,c.opportunityId,c.leadId) : null;
   const job=await enqueueJob({kind:c.jobKind,missionId,opportunityId:c.opportunityId,leadId:c.leadId,payload:{decision:c.action,reason:c.reason,decisionId:memory.id,strategyExperimentId:strategy?.experimentId,strategyVariantId:rolling?.strategyVariantId||strategy?.variant.id,strategyContext:strategy?.context,strategyRationale:strategy?.rationale,rollingCapitalScore:rolling?.score,rollingCapitalPeriod:rolling?.period,rollingCapitalExploration:rolling?.exploration},idempotencyKey:`decision:${missionId}:${c.action}:${c.opportunityId||"global"}`,maxAttempts:3,runAfter:new Date().toISOString()});
   await attachDecisionJob(memory.id,job.id);

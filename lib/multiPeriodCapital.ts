@@ -131,15 +131,11 @@ export async function optimizeMultiPeriodCapital(
 
   const candidates: HorizonCandidate[] = [];
   for (const opportunity of opportunities) {
-    const economic: any = await scoreOpportunity(opportunity as any);
+    const economic: any = await scoreOpportunity(opportunity.id);
     const action = opportunity.status === "new" ? "build" : opportunity.status === "qualified" ? "outreach" : "follow_up";
     let strategy: any = null;
     try {
-      strategy = await selectContextualStrategy({
-        missionId,
-        opportunityId: opportunity.id,
-        action,
-      } as any);
+      strategy = await selectContextualStrategy(missionId, action, opportunity.id);
     } catch {
       strategy = null;
     }

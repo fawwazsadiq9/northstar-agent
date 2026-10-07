@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+
 type Tab="command"|"opportunities"|"websites"|"leads"|"revenue"|"intelligence"|"activity";
 type Mission={id:string;objective:string;status:string;progress:number;currentStage:string;updatedAt:string};
 type Opportunity={id:string;businessName:string;category:string;location:string;score:number;signals:string[];status:string;contactEmail?:string;deployedWebsiteUrl?:string};
@@ -9,34 +10,168 @@ type Lead={id:string;opportunityId:string;name:string;email?:string;phone?:strin
 type Revenue={id:string;opportunityId?:string;type:string;amount:number;currency:string;note:string;createdAt:string};
 type Deal={id:string;opportunityId:string;leadId?:string;value:number;currency:string;status:string};
 type Response={id:string;leadId:string;content:string;channel:string;status:string;kind?:string;createdAt:string};
-const tabs:[Tab,string][]=[["command","Command"],["opportunities","Opportunities"],["websites","Websites"],["leads","Leads"],["revenue","Revenue"],["intelligence","Intelligence"],["activity","Activity"]];
+
+const tabs:[Tab,string,string][]=[
+  ["command","Command","01"],["opportunities","Opportunities","02"],["websites","Asset Forge","03"],
+  ["leads","Revenue Flow","04"],["revenue","Revenue","05"],["intelligence","Intelligence","06"],["activity","Activity","07"]
+];
+
+function Icon({name}:{name:string}) {
+  const paths:Record<string,string>={command:"M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6 5.6 18.4",target:"M12 3a9 9 0 1 0 9 9M12 7a5 5 0 1 0 5 5M12 11a1 1 0 1 0 1 1",layers:"M3 7l9-4 9 4-9 4-9-4Zm0 5 9 4 9-4M3 17l9 4 9-4",users:"M16 20v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 10a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm7-6a3 3 0 0 1 0 6m2 10v-2a4 4 0 0 0-3-3",money:"M3 7h18v14H3zM7 3h10v4H7zM12 12a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z",brain:"M9 3a3 3 0 0 0-3 3v1a3 3 0 0 0-3 3 3 3 0 0 0 3 3v1a3 3 0 0 0 3 3h1V3H9Zm6 0a3 3 0 0 1 3 3v1a3 3 0 0 1 3 3 3 3 0 0 1-3 3v1a3 3 0 0 1-3 3h-1V3h1Z",activity:"M3 12h4l2-7 4 14 2-7h6"};
+  return <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d={paths[name]||paths.command}/></svg>;
+}
+
+function formatMoney(n:number){return "$"+Math.round(n||0).toLocaleString();}
+function pct(n:number){return Math.round((n||0)*100)+"%";}
 
 export default function Home(){
- const [tab,setTab]=useState<Tab>("command"),[mission,setMission]=useState<Mission|null>(null),[missions,setMissions]=useState<Mission[]>([]),[opportunities,setOpportunities]=useState<Opportunity[]>([]),[assets,setAssets]=useState<Asset[]>([]),[leads,setLeads]=useState<Lead[]>([]),[revenue,setRevenue]=useState<Revenue[]>([]),[deals,setDeals]=useState<Deal[]>([]),[responses,setResponses]=useState<Response[]>([]);
- const [learning,setLearning]=useState<any>(null),[economics,setEconomics]=useState<any>(null),[economicLearning,setEconomicLearning]=useState<any>(null),[portfolio,setPortfolio]=useState<any>(null),[capital,setCapital]=useState<any>(null),[busy,setBusy]=useState(""),[error,setError]=useState(""),[notice,setNotice]=useState("");
- async function refresh(){const r=await Promise.all(["/api/missions","/api/opportunities","/api/assets","/api/leads","/api/revenue","/api/deals","/api/execution","/api/revenue-learning","/api/economics","/api/economic-learning","/api/portfolio","/api/capital?missionId="+encodeURIComponent(mission?.id||"")].map(x=>fetch(x,{cache:"no-store"})));if(!r.every(x=>x.ok))throw Error("Workspace refresh failed");const [m,o,a,l,v,d,rr,rl,ec,el,pf,cp]=await Promise.all(r.map(x=>x.json()));setMissions(m);setMission(m[0]||null);setOpportunities(o);setAssets(a);setLeads(l);setRevenue(v);setDeals(d);setResponses(rr);setLearning(rl);setEconomics(ec);setEconomicLearning(el);setPortfolio(pf);setCapital(cp)}
- async function launch(){setBusy("mission");setError("");try{const r=await fetch("/api/missions",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({objective:"Find and pursue the highest-value next revenue opportunity."})});const m=await r.json();if(!r.ok)throw Error(m.error);setMission(m);setNotice("Mission queued. Discovery is running.");fetch("/api/missions/run",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({missionId:m.id})}).catch(()=>{});for(let i=0;i<20;i++){await new Promise(x=>setTimeout(x,1000));await refresh().catch(()=>{});const ms=await fetch("/api/missions",{cache:"no-store"}).then(x=>x.json()).catch(()=>[]);const cur=ms.find((x:Mission)=>x.id===m.id);if(cur)setMission(cur);if(cur?.status==="completed"||cur?.status==="failed")break}}catch(e){setError(e instanceof Error?e.message:"Mission failed")}finally{setBusy("")}}
- async function post(url:string,body:any,key:string,msg:string){setBusy(key);setError("");try{const r=await fetch(url,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)});const d=await r.json().catch(()=>({}));if(!r.ok)throw Error(d.error||"Action failed");setNotice(msg);await refresh()}catch(e){setError(e instanceof Error?e.message:"Action failed")}finally{setBusy("")}}
- async function build(o:string,a:"website"|"offer"|"outreach"){await post("/api/operator",{opportunityId:o,action:a},o+a,a==="website"?"Website built.":a==="offer"?"Offer built.":"Outreach draft built.")}
- async function audit(o:string){setBusy(o+"audit");try{const r=await fetch("/api/revenue-audits?opportunityId="+encodeURIComponent(o));const d=await r.json();if(!r.ok)throw Error(d.error);setNotice("Revenue audit complete.");setAuditData(x=>({...x,[o]:d}))}catch(e){setError(e instanceof Error?e.message:"Audit failed")}finally{setBusy("")}}
- const [auditData,setAuditData]=useState<Record<string,any>>({});
- async function publish(a:Asset){setBusy(a.id);try{let r=await fetch("/api/approvals",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({assetId:a.id,action:"publish"})});let d=await r.json();if(!r.ok)throw Error(d.error);r=await fetch("/api/deployments",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({assetId:a.id})});d=await r.json();if(!r.ok)throw Error(d.error);setNotice("Website published.");await refresh()}catch(e){setError(e instanceof Error?e.message:"Publish failed")}finally{setBusy("")}}
- async function respond(id:string){await post("/api/execution",{action:"respond",leadId:id},id+"r","AI response drafted. Review before sending.")}
- async function approveResponse(id:string){await post("/api/execution",{action:"approve_response",responseId:id},id+"a","Response approved. Ready to send.")}
- async function sendResponse(id:string){await post("/api/execution",{action:"send_response",responseId:id},id+"s","Response sent. Follow-up scheduled.")}
- async function meeting(l:Lead){await post("/api/execution",{action:"appointment",leadId:l.id,startsAt:new Date(Date.now()+86400000).toISOString()},l.id+"m","Appointment recorded.")}
- async function deal(l:Lead){const v=prompt("Deal value (USD)","2000");if(v)await post("/api/execution",{action:"deal",leadId:l.id,opportunityId:l.opportunityId,value:Number(v)},l.id+"d","Deal created.")}
- async function won(d:Deal){await post("/api/execution",{action:"close_deal",dealId:d.id,status:"won"},d.id+"w","Deal closed-won and attributed.")}
- useEffect(()=>{refresh().catch(e=>setError(e.message))},[]);
- const websites=assets.filter(a=>a.type==="website"),wonRevenue=revenue.filter(x=>x.type==="won"||x.type==="payment").reduce((n,x)=>n+x.amount,0),pipeline=revenue.filter(x=>x.type==="pipeline").reduce((n,x)=>n+x.amount,0);
- return <main className="shell"><header className="nav"><div className="brand"><span className="brand-mark">✦</span>NORTHSTAR</div><div className="status"><span/>AUTONOMOUS CORE ONLINE</div><button className="ghost" onClick={launch} disabled={!!busy}>{busy==="mission"?"RUNNING…":"RUN MISSION →"}</button></header>
- <nav className="product-nav">{tabs.map(([id,label])=><button key={id} className={tab===id?"active":""} onClick={()=>setTab(id)}>{label}</button>)}</nav>
- {error&&<div className="global-error">{error}</div>}{notice&&<div className="global-notice">{notice}</div>}
- {tab==="command"&&<section className="workspace"><span className="eyebrow">REVENUE EXECUTION ENGINE</span><h1>From opportunity to <em>revenue.</em></h1><p className="hero-copy">Discover → audit → build → capture → respond → meet → close → attribute.</p><div className="command-grid"><div className="command-card"><small>MISSION</small><strong>{mission?.status?.toUpperCase()||"READY"}</strong><span>{mission?.currentStage||"Awaiting execution"}</span><div className="progress"><i style={{width:(mission?.progress||0)+"%"}}/></div><button className="primary" onClick={launch}>START MISSION</button></div><div className="command-card"><small>OPPORTUNITIES</small><strong>{opportunities.length}</strong><span>ranked business signals · economic allocation active</span><button className="secondary" onClick={()=>setTab("opportunities")}>OPEN →</button></div><div className="command-card"><small>ECONOMIC PRIORITY</small><strong>{economics?.ranked?.length||0}</strong><span>${(economics?.allocated||0).toFixed(2)} of ${(economics?.budget||0).toFixed(2)} execution budget allocated</span><button className="secondary" onClick={()=>setTab("opportunities")}>OPEN →</button></div><div className="command-card"><small>PORTFOLIO ALLOCATION</small><strong>{portfolio?.portfolio?.allocations?.length||0}</strong><span>${(portfolio?.portfolio?.allocated||0).toFixed(2)} funded · ${(portfolio?.portfolio?.explorationAllocated||0).toFixed(2)} exploration</span><button className="secondary" onClick={()=>setTab("intelligence")}>OPEN →</button></div><div className="command-card"><small>JOINT CAPITAL</small><strong>{capital?.allocations?.length||0}</strong><span>${(capital?.allocated||0).toFixed(2)} allocated · {capital?.capacityUsed||0}/{capital?.capacity||0} capacity</span><button className="secondary" onClick={()=>setTab("intelligence")}>OPEN →</button></div><div className="command-card"><small>ATTRIBUTED REVENUE</small><strong>{"$"}{wonRevenue.toLocaleString()}</strong><span>{"$"}{pipeline.toLocaleString()} pipeline</span><button className="secondary" onClick={()=>setTab("revenue")}>OPEN →</button></div></div><div className="execution-loop">{["DISCOVER","AUDIT","BUILD","RESPOND","CLOSE"].map((x,i)=><div key={x}><b>0{i+1} {x}</b><span>{["Find real businesses.","Quantify the revenue gap.","Create the required assets.","Handle inbound demand.","Prove the money generated."][i]}</span></div>)}</div></section>}
- {tab==="opportunities"&&<section className="workspace"><div className="section-head"><div><span className="eyebrow">OPPORTUNITY INTELLIGENCE</span><h2>Businesses Northstar can pursue</h2></div><button className="secondary" onClick={launch}>RUN NEW SCAN</button></div><div className="opportunity-grid">{opportunities.map(o=><article className="opportunity" key={o.id}><div className="score">{o.score}</div><div className="opportunity-main"><strong>{o.businessName}</strong><span>{o.category} · {o.location}</span><div className="signal-row">{(o.signals||[]).slice(0,3).map(s=><span key={s}>{s}</span>)}</div>{economics?.ranked?.filter((x:any)=>x.opportunityId===o.id).map((x:any)=><div className="audit-result" key={x.opportunityId}><b>{x.recommendation.toUpperCase()}</b><span>EV ${x.expectedValue.toFixed(0)} · ${x.expectedCashVelocity.toFixed(0)}/day · {Math.round(x.winProbability*100)}% win estimate</span></div>)}<div className="action-row"><button className="audit-button" onClick={()=>audit(o.id)}>{busy===o.id+"audit"?"ANALYZING…":"REVENUE AUDIT"}</button><button className="audit-button" onClick={()=>build(o.id,"website")}>BUILD WEBSITE</button><button className="audit-button" onClick={()=>build(o.id,"offer")}>BUILD OFFER</button>{o.contactEmail&&<button className="audit-button" onClick={()=>build(o.id,"outreach")}>DRAFT OUTREACH</button>}</div>{auditData[o.id]&&<div className="audit-result"><b>{auditData[o.id].confidence}% confidence</b><span>{"$"}{auditData[o.id].modeledAnnualRevenue.low.toLocaleString()}–{"$"}{auditData[o.id].modeledAnnualRevenue.high.toLocaleString()} modeled annual upside</span></div>}</div><small className="opp-status">{o.status.toUpperCase()}</small></article>)}{!opportunities.length&&<div className="empty">Run a mission to discover businesses.</div>}</div></section>}
- {tab==="websites"&&<section className="workspace"><div className="section-head"><div><span className="eyebrow">WEBSITE FACTORY</span><h2>Assets and deployments</h2></div></div><div className="asset-grid">{websites.map(a=><article className="asset-card" key={a.id}><small>{opportunities.find(o=>o.id===a.opportunityId)?.businessName||"Opportunity"}</small><strong>{a.title}</strong><span>{a.status.toUpperCase()}</span>{a.deploymentUrl?<a className="live-link" href={a.deploymentUrl} target="_blank">OPEN LIVE SITE ↗</a>:<button className="publish" onClick={()=>publish(a)}>{busy===a.id?"PUBLISHING…":"APPROVE & PUBLISH"}</button>}</article>)}{!websites.length&&<div className="empty">No website assets. Build one from Opportunities.</div>}</div></section>}
- {tab==="leads"&&<section className="workspace"><div className="section-head"><div><span className="eyebrow">REVENUE EXECUTION</span><h2>Lead → response → meeting → deal</h2></div><span>{leads.length} LEADS</span></div><div className="lead-list">{leads.map(l=><article className="lead-card" key={l.id}><div><strong>{l.name}</strong><span>{l.email||l.phone||"No contact"}</span><small>{opportunities.find(o=>o.id===l.opportunityId)?.businessName||"Opportunity"}</small></div><b>{l.status.toUpperCase()}</b><p>{l.message||"No message supplied."}</p><div className="action-row"><button className="audit-button" onClick={()=>respond(l.id)}>AI RESPONSE</button><button className="audit-button" onClick={()=>meeting(l)}>RECORD MEETING</button><button className="audit-button" onClick={()=>deal(l)}>CREATE DEAL</button>{deals.filter(d=>d.leadId===l.id).map(d=><button key={d.id} className="publish" onClick={()=>won(d)} disabled={d.status==="won"}>{d.status==="won"?"WON":"CLOSE WON"}</button>)}</div>{responses.filter(r=>r.leadId===l.id).slice(0,3).map(r=><div className="response-card" key={r.id}><small>{(r.kind||"initial").replace("_"," ").toUpperCase()} · {r.status.toUpperCase()}</small><p>{r.content}</p><div className="action-row">{r.status==="draft"&&<button className="audit-button" onClick={()=>approveResponse(r.id)}>APPROVE</button>}{r.status==="approved"&&<button className="publish" onClick={()=>sendResponse(r.id)}>SEND EMAIL</button>}</div></div>)}</article>)}{!leads.length&&<div className="empty">No leads yet. Publish a website and submit its lead form.</div>}</div></section>}
- {tab==="revenue"&&<section className="workspace"><span className="eyebrow">ATTRIBUTION</span><h2>Revenue generated, not activity</h2><div className="metric-grid"><div><small>WON</small><strong>{"$"}{wonRevenue.toLocaleString()}</strong></div><div><small>PIPELINE</small><strong>{"$"}{pipeline.toLocaleString()}</strong></div><div><small>LEADS</small><strong>{leads.length}</strong></div><div><small>WON DEALS</small><strong>{deals.filter(d=>d.status==="won").length}</strong></div></div><div className="revenue-list">{revenue.map(r=><article key={r.id}><b>{r.type.toUpperCase()}</b><strong>{r.currency} {r.amount.toLocaleString()}</strong><span>{r.note}</span></article>)}</div></section>}
- {tab==="intelligence"&&<section className="workspace"><span className="eyebrow">REVENUE INTELLIGENCE LAB</span><h2>Teach Northstar what actually converts</h2><p className="hero-copy">Northstar now links strategy experiments to real outcomes, weights learning by revenue, and only promotes contextual winners after sufficient evidence.</p><div className="command-grid"><div className="command-card"><small>ATTRIBUTED REVENUE</small><strong>$ {(learning?.totalRevenue||0).toLocaleString()}</strong><span>{learning?.attributionCount||0} experiment outcomes linked to revenue</span></div><div className="command-card"><small>PLAYBOOKS</small><strong>{learning?.playbooks?.length||0}</strong><span>Contextual winners eligible for autonomous reuse</span></div><div className="command-card"><small>ECONOMIC EVIDENCE</small><strong>{economicLearning?.observations?.length||0}</strong><span>Observed outcomes recalibrating the economic model</span></div><div className="command-card"><small>CAUSALITY</small><strong>{portfolio?.causality?.estimates?.filter((x:any)=>x.credible).length||0}</strong><span>Contextual treatment effects with sufficient evidence</span></div></div><div className="execution-loop">{(portfolio?.portfolio?.allocations||[]).slice(0,6).map((a:any)=><div key={a.opportunityId}><b>{a.allocation.toUpperCase()} · {a.businessName}</b><span>EV ${a.expectedValue.toFixed(0)} · ${a.marginalROI.toFixed(1)}x marginal ROI</span></div>)}{(learning?.playbooks||[]).slice(0,6).map((p:any)=><div key={p.id}><b>{p.context.industry.toUpperCase()} · {p.context.channel.toUpperCase()}</b><span>{p.recommendedVariantName} · {Math.round(p.confidence*100)}% confidence · {Math.round(p.lift*100)}% revenue lift</span></div>)}</div><div className="command-grid"><div className="command-card"><small>ORANGE DATASET</small><strong>LIVE</strong><span>Real opportunities and outcomes</span><a className="primary" href="/api/intelligence/orange">DOWNLOAD CSV</a></div><div className="command-card"><small>MODEL WORKFLOW</small><strong>READY</strong><span>Rank and test outcome predictors</span><a className="secondary" href="/workflows/northstar-opportunity-intelligence.ows" target="_blank">OPEN WORKFLOW</a></div></div><div className="execution-loop"><div><b>01 ATTRIBUTE</b><span>Link experiments to real deals and revenue.</span></div><div><b>02 WEIGHT</b><span>Revenue matters more than raw activity.</span></div><div><b>03 PROVE</b><span>Require sufficient evidence before promotion.</span></div><div><b>04 EVOLVE</b><span>Feed validated playbooks into autonomous decisions.</span></div></div></section>}{tab==="activity"&&<section className="workspace"><span className="eyebrow">EXECUTION HISTORY</span><h2>What Northstar actually did</h2><div className="mission-list">{missions.map(m=><article key={m.id}><b>{m.status.toUpperCase()}</b><strong>{m.objective}</strong><span>{m.currentStage} · {m.progress}%</span><small>{new Date(m.updatedAt).toLocaleString()}</small></article>)}</div></section>}
- <footer><span>NORTHSTAR / REVENUE EXECUTION ENGINE</span><span>DISCOVER · BUILD · RESPOND · CLOSE · MEASURE</span></footer></main>
+  const [tab,setTab]=useState<Tab>("command");
+  const [mission,setMission]=useState<Mission|null>(null),[missions,setMissions]=useState<Mission[]>([]);
+  const [opportunities,setOpportunities]=useState<Opportunity[]>([]),[assets,setAssets]=useState<Asset[]>([]);
+  const [leads,setLeads]=useState<Lead[]>([]),[revenue,setRevenue]=useState<Revenue[]>([]),[deals,setDeals]=useState<Deal[]>([]),[responses,setResponses]=useState<Response[]>([]);
+  const [learning,setLearning]=useState<any>(null),[economics,setEconomics]=useState<any>(null),[economicLearning,setEconomicLearning]=useState<any>(null);
+  const [portfolio,setPortfolio]=useState<any>(null),[capital,setCapital]=useState<any>(null),[decision,setDecision]=useState<any>(null),[replan,setReplan]=useState<any>(null);
+  const [busy,setBusy]=useState(""),[error,setError]=useState(""),[notice,setNotice]=useState("");
+  const [auditData,setAuditData]=useState<Record<string,any>>({});
+
+  async function refresh(){
+    const missionId=mission?.id||missions[0]?.id||"";
+    const urls=["/api/missions","/api/opportunities","/api/assets","/api/leads","/api/revenue","/api/deals","/api/execution","/api/revenue-learning","/api/economics","/api/economic-learning","/api/portfolio"];
+    const core=await Promise.all(urls.map(x=>fetch(x,{cache:"no-store"})));
+    if(!core.every(x=>x.ok))throw Error("Workspace refresh failed");
+    const [m,o,a,l,v,d,rr,rl,ec,el,pf]=await Promise.all(core.map(x=>x.json()));
+    const active=m.find((x:Mission)=>x.id===mission?.id)||m[0]||null;
+    const id=active?.id||missionId;
+    const extras=await Promise.all([
+      id?fetch("/api/capital?missionId="+encodeURIComponent(id),{cache:"no-store"}):Promise.resolve(null),
+      id?fetch("/api/decision-engine?missionId="+encodeURIComponent(id),{cache:"no-store"}):Promise.resolve(null),
+      id?fetch("/api/replan?missionId="+encodeURIComponent(id),{cache:"no-store"}):Promise.resolve(null)
+    ]);
+    const [cp,dc,rp]=await Promise.all(extras.map(x=>x?x.json():null));
+    setMissions(m);setMission(active);setOpportunities(o);setAssets(a);setLeads(l);setRevenue(v);setDeals(d);setResponses(rr);
+    setLearning(rl);setEconomics(ec);setEconomicLearning(el);setPortfolio(pf);setCapital(cp);setDecision(dc);setReplan(rp);
+  }
+
+  async function launch(){
+    setBusy("mission");setError("");setNotice("");
+    try{
+      const r=await fetch("/api/missions",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({objective:"Find and pursue the highest-value next revenue opportunity."})});
+      const m=await r.json();if(!r.ok)throw Error(m.error);
+      setMission(m);setNotice("Autonomous mission initialized.");
+      fetch("/api/missions/run",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({missionId:m.id})}).catch(()=>{});
+      for(let i=0;i<12;i++){await new Promise(x=>setTimeout(x,1000));await refresh().catch(()=>{});}
+    }catch(e){setError(e instanceof Error?e.message:"Mission failed")}finally{setBusy("")}
+  }
+
+  async function post(url:string,body:any,key:string,msg:string){
+    setBusy(key);setError("");try{
+      const r=await fetch(url,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)});
+      const d=await r.json().catch(()=>({}));if(!r.ok)throw Error(d.error||"Action failed");
+      setNotice(msg);await refresh();
+    }catch(e){setError(e instanceof Error?e.message:"Action failed")}finally{setBusy("")}
+  }
+  async function build(o:string,a:"website"|"offer"|"outreach"){await post("/api/operator",{opportunityId:o,action:a},o+a,a==="website"?"Website built.":a==="offer"?"Offer built.":"Outreach draft built.")}
+  async function audit(o:string){setBusy(o+"audit");try{const r=await fetch("/api/revenue-audits?opportunityId="+encodeURIComponent(o));const d=await r.json();if(!r.ok)throw Error(d.error);setNotice("Revenue audit complete.");setAuditData(x=>({...x,[o]:d}))}catch(e){setError(e instanceof Error?e.message:"Audit failed")}finally{setBusy("")}}
+  async function publish(a:Asset){setBusy(a.id);try{let r=await fetch("/api/approvals",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({assetId:a.id,action:"publish"})});let d=await r.json();if(!r.ok)throw Error(d.error);r=await fetch("/api/deployments",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({assetId:a.id})});d=await r.json();if(!r.ok)throw Error(d.error);setNotice("Asset deployed.");await refresh()}catch(e){setError(e instanceof Error?e.message:"Publish failed")}finally{setBusy("")}}
+  async function respond(id:string){await post("/api/execution",{action:"respond",leadId:id},id+"r","AI response drafted.")}
+  async function approveResponse(id:string){await post("/api/execution",{action:"approve_response",responseId:id},id+"a","Response approved.")}
+  async function sendResponse(id:string){await post("/api/execution",{action:"send_response",responseId:id},id+"s","Response sent. Follow-up scheduled.")}
+  async function meeting(l:Lead){await post("/api/execution",{action:"appointment",leadId:l.id,startsAt:new Date(Date.now()+86400000).toISOString()},l.id+"m","Appointment recorded.")}
+  async function deal(l:Lead){const v=prompt("Deal value (USD)","2000");if(v)await post("/api/execution",{action:"deal",leadId:l.id,opportunityId:l.opportunityId,value:Number(v)},l.id+"d","Deal created.")}
+  async function won(d:Deal){await post("/api/execution",{action:"close_deal",dealId:d.id,status:"won"},d.id+"w","Deal closed-won and attributed.")}
+  async function replanNow(){if(mission)await post("/api/replan",{missionId:mission.id,trigger:"manual"},"replan","Economic plan recalculated.")}
+
+  useEffect(()=>{refresh().catch(e=>setError(e.message))},[]);
+
+  const websites=assets.filter(a=>a.type==="website");
+  const wonRevenue=revenue.filter(x=>x.type==="won"||x.type==="payment").reduce((n,x)=>n+x.amount,0);
+  const pipeline=revenue.filter(x=>x.type==="pipeline").reduce((n,x)=>n+x.amount,0);
+  const selected=decision?.selected;
+  const allocations=capital?.allocations||portfolio?.portfolio?.allocations||[];
+  const systemStage=mission?.currentStage||"STANDBY";
+  const activity=useMemo(()=>[
+    ...(replan?.events||[]).slice(0,3).map((e:any)=>({label:"REPLAN",text:e.allocationsChanged?"Capital allocation changed":"Plan reconciled",meta:new Date(e.createdAt).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})})),
+    ...opportunities.slice(0,3).map(o=>({label:"SIGNAL",text:o.businessName,meta:o.category})),
+    ...leads.slice(0,2).map(l=>({label:"LEAD",text:l.name,meta:l.status}))
+  ].slice(0,6),[replan,opportunities,leads]);
+
+  return <main className="northstar-app">
+    <aside className="sidebar">
+      <div className="brand-lockup"><div className="brand-orbit"><span>✦</span></div><div><b>NORTHSTAR</b><small>ECONOMIC INTELLIGENCE</small></div></div>
+      <div className="sidebar-status"><i/> SYSTEM ONLINE <span>v2.0</span></div>
+      <nav className="side-nav">{tabs.map(([id,label,num])=><button key={id} className={tab===id?"active":""} onClick={()=>setTab(id)}><Icon name={id==="command"?"command":id==="opportunities"?"target":id==="websites"?"layers":id==="leads"?"users":id==="revenue"?"money":id==="intelligence"?"brain":"activity"}/><span>{label}</span><em>{num}</em></button>)}</nav>
+      <div className="sidebar-bottom"><div className="mini-core"><span>✦</span><div><b>AUTONOMOUS CORE</b><small>Learning continuously</small></div></div><button className="settings">SYSTEM SETTINGS <span>↗</span></button></div>
+    </aside>
+
+    <section className="main-stage">
+      <header className="topbar">
+        <div><span className="top-eyebrow">NORTHSTAR / {tab.toUpperCase()}</span><strong>{systemStage.toUpperCase()}</strong></div>
+        <div className="telemetry"><span><i/> CORE ONLINE</span><span>CAPACITY {capital?.capacityUsed||0}/{capital?.capacity||0}</span><span>UTC {new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})}</span><button className="run-button" onClick={launch} disabled={!!busy}>{busy==="mission"?"RUNNING":"RUN AUTONOMOUS CYCLE"} <b>⌘</b></button></div>
+      </header>
+
+      {error&&<div className="system-alert danger">{error}</div>}{notice&&<div className="system-alert">{notice}<button onClick={()=>setNotice("")}>×</button></div>}
+
+      {tab==="command"&&<section className="command-view">
+        <div className="command-hero">
+          <div><span className="top-eyebrow">AUTONOMOUS ECONOMIC COMMAND CENTER</span><h1>Northstar is <span>thinking ahead.</span></h1><p>One system that discovers opportunities, allocates scarce execution capacity, acts, measures revenue, and continuously replans.</p></div>
+          <div className="mission-state"><span className="pulse"/><small>ACTIVE MISSION</small><b>{mission?.status?.toUpperCase()||"READY"}</b><label>{mission?.currentStage||"Awaiting autonomous execution"}</label><div className="thin-progress"><i style={{width:(mission?.progress||0)+"%"}}/></div></div>
+        </div>
+
+        <div className="core-layout">
+          <div className="intelligence-core">
+            <div className="core-grid"/>
+            <div className="orbit orbit-one"><span/><i/></div><div className="orbit orbit-two"><span/><i/></div><div className="orbit orbit-three"><span/><i/></div>
+            <div className="core-glow"/><div className="core-symbol">✦<small>NS</small></div>
+            <div className="core-caption"><span>DECISION ENGINE</span><b>{selected?.action?.toUpperCase()||"STANDBY"}</b></div>
+          </div>
+          <div className="decision-panel">
+            <div className="panel-kicker"><span className="live-dot"/> NEXT BEST ACTION <span>LIVE</span></div>
+            <h2>{selected?.action?selected.action.replace("_"," "):"Awaiting signal"}</h2>
+            <p>{selected?.reason||"Launch an autonomous mission and Northstar will evaluate the current economic state before choosing its next action."}</p>
+            <div className="decision-meta"><div><small>CONFIDENCE</small><b>{selected?Math.round(selected.score)+"%":"—"}</b></div><div><small>EXPECTED VALUE</small><b>{formatMoney(allocations[0]?.expectedValue||0)}</b></div><div><small>PERIOD</small><b>{allocations[0]?.period||"—"}</b></div></div>
+            <button className="decision-button" onClick={()=>mission&&post("/api/decision-engine",{missionId:mission.id},"decision","Decision executed.")} disabled={!mission||!!busy}>EXECUTE DECISION <span>→</span></button>
+          </div>
+        </div>
+
+        <div className="metric-strip">
+          <div><small>ATTRIBUTED REVENUE</small><strong>{formatMoney(wonRevenue)}</strong><span>verified closed-won flow</span></div>
+          <div><small>PIPELINE</small><strong>{formatMoney(pipeline)}</strong><span>{deals.filter(d=>d.status!=="won").length} open deals</span></div>
+          <div><small>OPPORTUNITIES</small><strong>{opportunities.length}</strong><span>economic candidates</span></div>
+          <div><small>CAPITAL ALLOCATED</small><strong>{formatMoney(capital?.allocated||0)}</strong><span>{capital?.capacityUsed||0}/{capital?.capacity||0} capacity</span></div>
+          <div><small>LEARNING EVIDENCE</small><strong>{economicLearning?.observations?.length||0}</strong><span>outcomes recalibrating model</span></div>
+        </div>
+
+        <div className="lower-grid">
+          <section className="panel">
+            <div className="panel-head"><div><span className="top-eyebrow">CAPITAL CONTROL</span><h3>Where Northstar is spending its attention</h3></div><button onClick={replanNow}>REPLAN ↻</button></div>
+            <div className="allocation-list">{allocations.slice(0,5).map((a:any,i:number)=><div className="allocation" key={(a.opportunityId||i)+i}><div className="allocation-index">0{i+1}</div><div className="allocation-main"><b>{a.businessName||"Opportunity"}</b><span>{a.strategyName||"Adaptive strategy"} · {a.allocation||"exploit"}</span><div className="allocation-bar"><i style={{width:Math.min(100,Math.max(8,(a.score||0)))+"%"}}/></div></div><div className="allocation-value"><b>{formatMoney(a.expectedValue||0)}</b><span>{a.period||"now"}</span></div></div>)}{!allocations.length&&<div className="empty-state">No active allocation. Run a mission to initialize the economic planner.</div>}</div>
+          </section>
+          <section className="panel activity-panel">
+            <div className="panel-head"><div><span className="top-eyebrow">LIVE SIGNALS</span><h3>System activity</h3></div><span className="live-label"><i/> STREAMING</span></div>
+            <div className="activity-feed">{activity.map((a,i)=><div className="feed-item" key={i}><div className="feed-dot"/><div><b>{a.label}</b><span>{a.text}</span></div><small>{a.meta}</small></div>)}{!activity.length&&<div className="empty-state">Awaiting system signals.</div>}</div>
+          </section>
+        </div>
+      </section>}
+
+      {tab==="opportunities"&&<Workspace title="Opportunity Intelligence" kicker="SIGNAL ACQUISITION" action={<button className="outline-button" onClick={launch}>RUN NEW SCAN ↗</button>}><div className="opportunity-grid futuristic">{opportunities.map(o=><article className="opportunity-card" key={o.id}><div className="opportunity-score"><span>SCORE</span><b>{o.score}</b></div><div className="opportunity-info"><div className="card-tag">{o.category} / {o.location}</div><h3>{o.businessName}</h3><div className="signal-row">{(o.signals||[]).slice(0,4).map(s=><span key={s}>{s}</span>)}</div>{economics?.ranked?.filter((x:any)=>x.opportunityId===o.id).map((x:any)=><div className="economic-line" key={x.opportunityId}><b>{x.recommendation.toUpperCase()}</b><span>EV {formatMoney(x.expectedValue)} · {formatMoney(x.expectedCashVelocity)}/DAY · {pct(x.winProbability)}</span></div>)}{auditData[o.id]&&<div className="economic-line"><b>AUDIT</b><span>{formatMoney(auditData[o.id].modeledAnnualRevenue.low)}–{formatMoney(auditData[o.id].modeledAnnualRevenue.high)} modeled annual upside</span></div>}<div className="action-row"><button onClick={()=>audit(o.id)}>AUDIT</button><button onClick={()=>build(o.id,"website")}>BUILD SITE</button><button onClick={()=>build(o.id,"offer")}>BUILD OFFER</button>{o.contactEmail&&<button onClick={()=>build(o.id,"outreach")}>OUTREACH</button>}</div></div><small className="opp-status">{o.status.toUpperCase()}</small></article>)}{!opportunities.length&&<div className="empty-state wide">Run a mission to discover real businesses.</div>}</div></Workspace>}
+
+      {tab==="websites"&&<Workspace title="Asset Forge" kicker="AUTONOMOUS PRODUCTION"><div className="asset-grid">{websites.map(a=><article className="asset-card" key={a.id}><div className="card-tag">{opportunities.find(o=>o.id===a.opportunityId)?.businessName||"Opportunity"}</div><h3>{a.title}</h3><span className="status-chip">{a.status.toUpperCase()}</span>{a.deploymentUrl?<a className="outline-button" href={a.deploymentUrl} target="_blank">OPEN LIVE SITE ↗</a>:<button className="outline-button" onClick={()=>publish(a)}>{busy===a.id?"DEPLOYING…":"APPROVE & DEPLOY"}</button>}</article>)}{!websites.length&&<div className="empty-state wide">No assets yet. Select an opportunity and deploy what it needs.</div>}</div></Workspace>}
+
+      {tab==="leads"&&<Workspace title="Revenue Flow" kicker="LEAD → RESPONSE → DEAL"><div className="lead-list futuristic">{leads.map(l=><article className="lead-card" key={l.id}><div className="lead-top"><div><span className="card-tag">INBOUND SIGNAL</span><h3>{l.name}</h3><span>{l.email||l.phone||"No contact channel"}</span><small>{opportunities.find(o=>o.id===l.opportunityId)?.businessName||"Opportunity"}</small></div><b>{l.status.toUpperCase()}</b></div><p>{l.message||"No message supplied."}</p><div className="action-row"><button onClick={()=>respond(l.id)}>AI RESPONSE</button><button onClick={()=>meeting(l)}>RECORD MEETING</button><button onClick={()=>deal(l)}>CREATE DEAL</button>{deals.filter(d=>d.leadId===l.id).map(d=><button key={d.id} className="accent-button" onClick={()=>won(d)} disabled={d.status==="won"}>{d.status==="won"?"WON":"CLOSE WON"}</button>)}</div>{responses.filter(r=>r.leadId===l.id).slice(0,3).map(r=><div className="response-card" key={r.id}><small>{(r.kind||"initial").replace("_"," ").toUpperCase()} · {r.status.toUpperCase()}</small><p>{r.content}</p><div className="action-row">{r.status==="draft"&&<button onClick={()=>approveResponse(r.id)}>APPROVE</button>}{r.status==="approved"&&<button className="accent-button" onClick={()=>sendResponse(r.id)}>SEND EMAIL</button>}</div></div>)}</article>)}{!leads.length&&<div className="empty-state wide">No live leads yet. Deploy a site and let the revenue loop begin.</div>}</div></Workspace>}
+
+      {tab==="revenue"&&<Workspace title="Revenue" kicker="OUTCOME TELEMETRY"><div className="metric-grid-large"><Metric label="WON REVENUE" value={formatMoney(wonRevenue)} sub="Attributed closed-won"/><Metric label="PIPELINE" value={formatMoney(pipeline)} sub="Open revenue potential"/><Metric label="LEADS" value={String(leads.length)} sub="Captured demand"/><Metric label="WON DEALS" value={String(deals.filter(d=>d.status==="won").length)} sub="Closed outcomes"/></div><div className="revenue-list">{revenue.map(r=><article key={r.id}><span className="card-tag">{r.type.toUpperCase()}</span><strong>{r.currency} {r.amount.toLocaleString()}</strong><span>{r.note}</span><small>{new Date(r.createdAt).toLocaleDateString()}</small></article>)}{!revenue.length&&<div className="empty-state wide">Revenue telemetry will appear as deals move through the system.</div>}</div></Workspace>}
+
+      {tab==="intelligence"&&<Workspace title="Intelligence" kicker="SELF-IMPROVING ECONOMIC BRAIN" action={<button className="outline-button" onClick={replanNow}>RECALIBRATE ↻</button>}><p className="workspace-intro">Northstar links strategy experiments, revenue outcomes, economic evidence and regret into an adaptive decision system. Evidence is experimental—not a guarantee of causality.</p><div className="intelligence-grid"><Metric label="ATTRIBUTED REVENUE" value={formatMoney(learning?.totalRevenue||0)} sub={(learning?.attributionCount||0)+" experiment outcomes"}/><Metric label="PLAYBOOKS" value={String(learning?.playbooks?.length||0)} sub="Contextual winners"/><Metric label="ECONOMIC EVIDENCE" value={String(economicLearning?.observations?.length||0)} sub="Observed outcomes"/><Metric label="CREDIBLE EFFECTS" value={String(portfolio?.causality?.estimates?.filter((x:any)=>x.credible).length||0)} sub="Evidence threshold met"/></div><div className="insight-grid"><section className="panel"><div className="panel-head"><div><span className="top-eyebrow">PLAYBOOKS</span><h3>What is working</h3></div></div>{(learning?.playbooks||[]).slice(0,6).map((p:any)=><div className="insight-row" key={p.id}><div><b>{p.context.industry}</b><span>{p.context.geography} · {p.context.channel}</span></div><strong>{p.recommendedVariantName}</strong><em>{Math.round(p.confidence*100)}% CONF</em></div>)}{!learning?.playbooks?.length&&<div className="empty-state">No validated playbooks yet.</div>}</section><section className="panel"><div className="panel-head"><div><span className="top-eyebrow">CAPITAL PLAN</span><h3>Expected economic return</h3></div></div>{allocations.slice(0,6).map((a:any)=><div className="insight-row" key={a.opportunityId}><div><b>{a.businessName}</b><span>{a.strategyName||"Adaptive"} · {a.allocation||"exploit"}</span></div><strong>{formatMoney(a.expectedValue)}</strong><em>{(a.marginalROI||0).toFixed(1)}x ROI</em></div>)}</section></div><div className="lab-links"><a href="/api/intelligence/orange">EXPORT ORANGE DATASET ↗</a><a href="/workflows/northstar-opportunity-intelligence.ows" target="_blank">OPEN MODEL WORKFLOW ↗</a><span>ATTRIBUTE → WEIGHT → PROVE → EVOLVE</span></div></Workspace>}
+
+      {tab==="activity"&&<Workspace title="Activity" kicker="AUTONOMOUS EXECUTION LOG"><div className="mission-list">{missions.map(m=><article key={m.id}><span className="card-tag">{m.status.toUpperCase()}</span><h3>{m.objective}</h3><p>{m.currentStage} · {m.progress}%</p><small>{new Date(m.updatedAt).toLocaleString()}</small></article>)}{!missions.length&&<div className="empty-state wide">No mission history.</div>}</div></Workspace>}
+
+      <footer><span>NORTHSTAR / AUTONOMOUS ECONOMIC INTELLIGENCE</span><span>DISCOVER · DECIDE · EXECUTE · LEARN</span></footer>
+    </section>
+  </main>
+}
+
+function Metric({label,value,sub}:{label:string;value:string;sub:string}){return <div className="metric-box"><small>{label}</small><strong>{value}</strong><span>{sub}</span></div>}
+
+function Workspace({title,kicker,action,children}:{title:string;kicker:string;action?:React.ReactNode;children:React.ReactNode}){
+ return <section className="workspace-page"><div className="workspace-header"><div><span className="top-eyebrow">{kicker}</span><h1>{title}</h1></div>{action}</div>{children}</section>
 }

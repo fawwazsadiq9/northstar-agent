@@ -1,4 +1,4 @@
-import { getDB, updateDB } from "./store";
+import { readDB, updateDB } from "./store";
 import { scoreOpportunity } from "./economicOptimizer";
 import { selectContextualStrategy } from "./strategyOptimizer";
 
@@ -117,7 +117,7 @@ export async function optimizeMultiPeriodCapital(
   missionId: string,
   options?: { horizon?: number; budget?: number; capacity?: number; explorationRate?: number },
 ): Promise<MultiPeriodPlan> {
-  const db: any = await getDB();
+  const db: any = await readDB();
   const horizon = Math.max(1, Math.min(30, options?.horizon ?? Number(process.env.NORTHSTAR_PLANNING_HORIZON_DAYS || 7)));
   const budget = Math.max(0, options?.budget ?? Number(process.env.NORTHSTAR_DAILY_EXECUTION_BUDGET_USD || 25) * horizon);
   const capacity = Math.max(1, options?.capacity ?? Number(process.env.NORTHSTAR_DAILY_EXECUTION_CAPACITY || 10) * horizon);
@@ -243,6 +243,6 @@ export async function optimizeMultiPeriodCapital(
 }
 
 export async function getMultiPeriodCapitalPlan(missionId: string): Promise<MultiPeriodPlan | null> {
-  const db: any = await getDB();
+  const db: any = await readDB();
   return ((db.multiPeriodPlans || []) as MultiPeriodPlan[]).find(p => p.missionId === missionId) || null;
 }

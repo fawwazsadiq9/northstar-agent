@@ -7,6 +7,7 @@ import { advanceMissionGraph } from "./missionGraph";
 import { readDB, updateDB } from "./store";
 import { resolveDecisionForJob } from "./decisionMemory";
 import { recordStrategyObservation } from "./strategy";
+import { replanMission } from "./closedLoop";
 
 async function executeTool(job:AgentJob, tool:string, input:Record<string,unknown>, fn:()=>Promise<Record<string,unknown>>) {
   const execution=await recordToolExecution({jobId:job.id,tool,status:"running",input});
@@ -75,6 +76,7 @@ export async function runWorker(limit=5) {
       await markNode(job,"succeeded");
       if(job.missionId) await advanceMissionGraph(job.missionId);
       await audit("external_action.executed","system","job",job.id,{kind:job.kind,attempt:job.attempts});
+      if(job.missionId) await replanMission(job.missionId, "worker_cycle");
       results.push({jobId:job.id,status:"succeeded",result});
     } catch(error) {
       const message=error instanceof Error?error.message:"Worker execution failed";
@@ -82,6 +84,7 @@ export async function runWorker(limit=5) {
       const failed=await (await import("./controlPlane")).failJob(job.id,message);
       if(failed.status==="failed") await resolveDecisionForJob(job,"failed");
       await audit("external_action.executed","system","job",job.id,{kind:job.kind,attempt:job.attempts,error:message,status:failed.status});
+      if(job.missionId) await replanMission(job.missionId, "job_failure");
       results.push({jobId:job.id,status:failed.status,error:message});
     }
   }

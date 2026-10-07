@@ -7,6 +7,7 @@ import { advanceMissionGraph } from "./missionGraph";
 import { readDB, updateDB } from "./store";
 import { resolveDecisionForJob } from "./decisionMemory";
 import { recordStrategyObservation } from "./strategy";
+import { replanMission } from "./closedLoop";
 
 async function executeTool(job:AgentJob, tool:string, input:Record<string,unknown>, fn:()=>Promise<Record<string,unknown>>) {
   const execution=await recordToolExecution({jobId:job.id,tool,status:"running",input});
@@ -32,7 +33,7 @@ async function executeJob(job:AgentJob):Promise<Record<string,unknown>> {
     case "discovery": {
       if(!job.missionId) throw new Error("Discovery job requires missionId");
       const db=await readDB(); const mission=db.missions.find(m=>m.id===job.missionId); if(!mission) throw new Error("Mission not found");
-      return executeTool(job,"opportunity.discover",{missionId:job.missionId},async()=>{const location=process.env.NORTHSTAR_DISCOVERY_LOCATION||"Austin, Texas"; const opportunities=await discoverOpportunities({location,limit:10}); await updateDB(d=>d.opportunities.unshift(...opportunities.filter(o=>!d.opportunities.some(x=>x.sourceId===o.sourceId)))); return {count:opportunities.length};});
+      return executeTool(job,"opportunity.discover",{missionId:job.missionId},async()=>{const location=process.env.NORTHSTAR_DISCOVERY_LOCATION||mission.objective.match(/(?:in|near|around)\s+([^,.]+(?:,\s*[^,.]+)?)/i)?.[1]||"Austin, Texas"; const opportunities=await discoverOpportunities({location,limit:10}); await updateDB(d=>d.opportunities.unshift(...opportunities.filter(o=>!d.opportunities.some(x=>x.sourceId===o.sourceId)))); return {count:opportunities.length};});
     }
     case "build": {
       if(!job.opportunityId) throw new Error("Build job requires opportunityId");
@@ -75,6 +76,7 @@ export async function runWorker(limit=5) {
       await markNode(job,"succeeded");
       if(job.missionId) await advanceMissionGraph(job.missionId);
       await audit("external_action.executed","system","job",job.id,{kind:job.kind,attempt:job.attempts});
+      if(job.missionId) await replanMission(job.missionId, "worker_cycle");
       results.push({jobId:job.id,status:"succeeded",result});
     } catch(error) {
       const message=error instanceof Error?error.message:"Worker execution failed";
@@ -82,6 +84,7 @@ export async function runWorker(limit=5) {
       const failed=await (await import("./controlPlane")).failJob(job.id,message);
       if(failed.status==="failed") await resolveDecisionForJob(job,"failed");
       await audit("external_action.executed","system","job",job.id,{kind:job.kind,attempt:job.attempts,error:message,status:failed.status});
+      if(job.missionId) await replanMission(job.missionId, "job_failure");
       results.push({jobId:job.id,status:failed.status,error:message});
     }
   }

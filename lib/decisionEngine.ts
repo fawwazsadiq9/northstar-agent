@@ -4,7 +4,8 @@ import { recordDecision, attachDecisionJob, getDecisionLearning } from "./decisi
 import { strategyPerformance } from "./strategy";
 import { selectContextualStrategy } from "./strategyOptimizer";
 import { scoreOpportunity } from "./economicOptimizer";
-import { getMultiPeriodCapitalPlan, optimizeMultiPeriodCapital } from "./multiPeriodCapital";
+import { getMultiPeriodCapitalPlan, optimizeMultiPeriodCapital, type MultiPeriodPlan } from "./multiPeriodCapital";
+import { replanMission } from "./closedLoop";
 
 export type DecisionAction = "discover"|"build"|"outreach"|"follow_up"|"measurement"|"recover"|"wait"|"approve";
 export interface DecisionCandidate { action:DecisionAction; score:number; reason:string; jobKind?:JobKind; opportunityId?:string; leadId?:string; requiresApproval?:boolean; }
@@ -14,7 +15,13 @@ function hasPendingJob(jobs:AgentJob[], missionId:string, kind:JobKind, opportun
   return jobs.some(j=>j.missionId===missionId && j.kind===kind && ["queued","running","retrying","blocked"].includes(j.status) && (!opportunityId || j.opportunityId===opportunityId));
 }
 
+async function rollingPlan(missionId:string):Promise<MultiPeriodPlan> {
+  const existing=await getMultiPeriodCapitalPlan(missionId);
+  return existing ?? optimizeMultiPeriodCapital(missionId);
+}
+
 export async function decideNextAction(missionId:string):Promise<Decision> {
+  await replanMission(missionId, "manual");
   const db=await readDB();
   const jobs=((db as typeof db & {jobs?:AgentJob[]}).jobs)||[];
   const nodes=((db as typeof db & {missionNodes?:Array<{id:string;missionId:string;kind:string;status:string;opportunityId?:string;approvalRequired?:boolean}>}).missionNodes)||[];
@@ -30,7 +37,7 @@ export async function decideNextAction(missionId:string):Promise<Decision> {
 
   const fresh=db.opportunities.filter(o=>o.status==="new"&&!db.leads.some(l=>l.opportunityId===o.id));
   if(fresh.length&&!hasPendingJob(jobs,missionId,"build")) {
-    const rolling=await (getMultiPeriodCapitalPlan(missionId) || optimizeMultiPeriodCapital(missionId));
+    const rolling=await rollingPlan(missionId);
     const ranked={ranked:rolling.allocations.map(a=>({opportunityId:a.opportunityId,economicScore:Math.min(100,a.score),expectedValue:a.expectedValue,expectedCashVelocity:a.expectedCash,strategyVariantId:a.strategyVariantId,period:a.period,exploration:a.exploration}))};
     const allowed=new Set(ranked.ranked.map(x=>x.opportunityId));
     const best=fresh.filter(o=>allowed.has(o.id)).sort((a,b)=>{
@@ -51,7 +58,7 @@ export async function decideNextAction(missionId:string):Promise<Decision> {
 
   const withEmail=db.opportunities.filter(o=>o.contactEmail&&o.status==="qualified");
   if(withEmail.length&&!hasPendingJob(jobs,missionId,"outreach")) {
-    const rolling=await (getMultiPeriodCapitalPlan(missionId) || optimizeMultiPeriodCapital(missionId));
+    const rolling=await rollingPlan(missionId);
     const ranked=rolling.allocations.filter(a=>withEmail.some(o=>o.id===a.opportunityId));
     const best=ranked.sort((a,b)=>b.score-a.score)[0];
     if(best){
@@ -80,7 +87,7 @@ export async function executeDecision(missionId:string):Promise<Decision> {
   const baselineWonRevenue=db.revenue.filter(r=>r.type==="won").reduce((s,r)=>s+r.amount,0);
   const memory=await recordDecision({missionId,action:c?.action||"wait",score:c?.score||0,reason:c?.reason||"No action",candidateActions:decision.candidates.map(x=>x.action),selected:true,opportunityId:c?.opportunityId,leadId:c?.leadId,baselineWonRevenue,outcome:"pending",reward:0,revenueDelta:0});
   if(!c||!c.jobKind||c.requiresApproval) return {...decision,decisionId:memory.id};
-  const rolling= c.opportunityId ? (await (getMultiPeriodCapitalPlan(missionId) || optimizeMultiPeriodCapital(missionId))).allocations.find(a=>a.opportunityId===c.opportunityId) : undefined;
+  const rolling= c.opportunityId ? (await rollingPlan(missionId)).allocations.find(a=>a.opportunityId===c.opportunityId) : undefined;
   const strategy=(c.action==="build"||c.action==="outreach"||c.action==="follow_up") ? await selectContextualStrategy(missionId,c.action,c.opportunityId,c.leadId) : null;
   const job=await enqueueJob({kind:c.jobKind,missionId,opportunityId:c.opportunityId,leadId:c.leadId,payload:{decision:c.action,reason:c.reason,decisionId:memory.id,strategyExperimentId:strategy?.experimentId,strategyVariantId:rolling?.strategyVariantId||strategy?.variant.id,strategyContext:strategy?.context,strategyRationale:strategy?.rationale,rollingCapitalScore:rolling?.score,rollingCapitalPeriod:rolling?.period,rollingCapitalExploration:rolling?.exploration},idempotencyKey:`decision:${missionId}:${c.action}:${c.opportunityId||"global"}`,maxAttempts:3,runAfter:new Date().toISOString()});
   await attachDecisionJob(memory.id,job.id);

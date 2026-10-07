@@ -33,7 +33,7 @@ async function executeJob(job:AgentJob):Promise<Record<string,unknown>> {
     case "discovery": {
       if(!job.missionId) throw new Error("Discovery job requires missionId");
       const db=await readDB(); const mission=db.missions.find(m=>m.id===job.missionId); if(!mission) throw new Error("Mission not found");
-      return executeTool(job,"opportunity.discover",{missionId:job.missionId},async()=>{const location=process.env.NORTHSTAR_DISCOVERY_LOCATION||"Austin, Texas"; const opportunities=await discoverOpportunities({location,limit:10}); await updateDB(d=>d.opportunities.unshift(...opportunities.filter(o=>!d.opportunities.some(x=>x.sourceId===o.sourceId)))); return {count:opportunities.length};});
+      return executeTool(job,"opportunity.discover",{missionId:job.missionId},async()=>{const location=process.env.NORTHSTAR_DISCOVERY_LOCATION||mission.objective.match(/(?:in|near|around)\s+([^,.]+(?:,\s*[^,.]+)?)/i)?.[1]||"Austin, Texas"; const opportunities=await discoverOpportunities({location,limit:10}); await updateDB(d=>d.opportunities.unshift(...opportunities.filter(o=>!d.opportunities.some(x=>x.sourceId===o.sourceId)))); return {count:opportunities.length};});
     }
     case "build": {
       if(!job.opportunityId) throw new Error("Build job requires opportunityId");

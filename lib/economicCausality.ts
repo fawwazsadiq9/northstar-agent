@@ -60,8 +60,22 @@ export async function recordEconomicRegret(input:{opportunityId?:string;contextK
   return updateDB(state=>{const d=state as CausalDB;d.economicRegret??=[];d.economicRegret.push({...input,id:"regret_"+crypto.randomUUID(),regret,createdAt:new Date().toISOString()});return d.economicRegret[d.economicRegret.length-1];});
 }
 
+export async function reconcileEconomicRegret(){
+  const db=await readDB() as CausalDB;
+  const plan=(db as any).economicPortfolio as {allocations?:Array<{opportunityId:string;expectedValue:number}>}|undefined;
+  const existing=db.economicRegret||[];
+  for(const allocation of plan?.allocations||[]){
+    const o=db.opportunities.find(x=>x.id===allocation.opportunityId); if(!o||!(o.status==="won"||o.status==="lost")) continue;
+    if(existing.some(x=>x.opportunityId===o.id&&x.contextKey==="realized")) continue;
+    const won=db.deals.filter(d=>d.opportunityId===o.id&&d.status==="won").reduce((s,d)=>s+d.value,0);
+    existing.push({id:"regret_"+crypto.randomUUID(),opportunityId:o.id,contextKey:"realized",selectedExpectedValue:allocation.expectedValue,realizedValue:won,regret:Math.max(0,allocation.expectedValue-won),createdAt:new Date().toISOString()});
+  }
+  await updateDB(state=>{(state as CausalDB).economicRegret=existing;});
+  return existing;
+}
+
 export async function getEconomicCausality(){
   const estimates=await estimateEconomicCausality();
-  const db=await readDB() as CausalDB;
-  return {estimates,regret:db.economicRegret||[]};
+  const regret=await reconcileEconomicRegret();
+  return {estimates,regret};
 }

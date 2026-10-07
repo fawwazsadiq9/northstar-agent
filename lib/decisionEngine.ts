@@ -6,6 +6,7 @@ import { selectContextualStrategy } from "./strategyOptimizer";
 import { rankOpportunities, scoreOpportunity } from "./economicOptimizer";
 import { optimizeEconomicPortfolio } from "./portfolioOptimizer";
 import { getJointCapitalPlan } from "./jointCapitalOptimizer";
+import { getMultiPeriodCapitalPlan, optimizeMultiPeriodCapital } from "./multiPeriodCapital";
 
 export type DecisionAction = "discover"|"build"|"outreach"|"follow_up"|"measurement"|"recover"|"wait"|"approve";
 export interface DecisionCandidate { action:DecisionAction; score:number; reason:string; jobKind?:JobKind; opportunityId?:string; leadId?:string; requiresApproval?:boolean; }
@@ -31,9 +32,8 @@ export async function decideNextAction(missionId:string):Promise<Decision> {
 
   const fresh=db.opportunities.filter(o=>o.status==="new"&&!db.leads.some(l=>l.opportunityId===o.id));
   if(fresh.length&&!hasPendingJob(jobs,missionId,"build")) {
-    const portfolio=await optimizeEconomicPortfolio(10);
-    const joint=await getJointCapitalPlan(missionId);
-    const ranked={ranked:joint.allocations.map(a=>({opportunityId:a.opportunityId,economicScore:Math.min(100,a.jointScore),expectedValue:a.expectedValue,expectedCashVelocity:a.expectedCashVelocity,strategyVariantId:a.strategyVariantId}))};
+    const rolling=await (getMultiPeriodCapitalPlan(missionId) || optimizeMultiPeriodCapital(missionId));
+    const ranked={ranked:rolling.allocations.map(a=>({opportunityId:a.opportunityId,economicScore:Math.min(100,a.score),expectedValue:a.expectedValue,expectedCashVelocity:a.expectedCash,strategyVariantId:a.strategyVariantId,period:a.period,exploration:a.exploration}))};
     const allowed=new Set(ranked.ranked.map(x=>x.opportunityId));
     const best=fresh.filter(o=>allowed.has(o.id)).sort((a,b)=>{
       const ae=ranked.ranked.find(x=>x.opportunityId===a.id)?.economicScore||0;
@@ -42,7 +42,7 @@ export async function decideNextAction(missionId:string):Promise<Decision> {
     })[0];
     if(best){
       const economics=ranked.ranked.find(x=>x.opportunityId===best.id);
-      candidates.push({action:"build",score:Math.min(100,55+(economics?.economicScore||best.score)*.45),reason:"Joint capital priority: "+best.businessName+" — expected value $"+(economics?.expectedValue||0).toFixed(0)+", cash velocity $"+(economics?.expectedCashVelocity||0).toFixed(0)+"/day",jobKind:"build",opportunityId:best.id});
+      candidates.push({action:"build",score:Math.min(100,55+(economics?.economicScore||best.score)*.45),reason:"Rolling-horizon capital priority: "+best.businessName+" — expected value $"+(economics?.expectedValue||0).toFixed(0)+", cash velocity $"+(economics?.expectedCashVelocity||0).toFixed(0)+"/day",jobKind:"build",opportunityId:best.id});
     }
   }
 
@@ -81,9 +81,9 @@ export async function executeDecision(missionId:string):Promise<Decision> {
   const baselineWonRevenue=db.revenue.filter(r=>r.type==="won").reduce((s,r)=>s+r.amount,0);
   const memory=await recordDecision({missionId,action:c?.action||"wait",score:c?.score||0,reason:c?.reason||"No action",candidateActions:decision.candidates.map(x=>x.action),selected:true,opportunityId:c?.opportunityId,leadId:c?.leadId,baselineWonRevenue,outcome:"pending",reward:0,revenueDelta:0});
   if(!c||!c.jobKind||c.requiresApproval) return {...decision,decisionId:memory.id};
-  const joint= c.opportunityId ? (await getJointCapitalPlan(missionId)).allocations.find(a=>a.opportunityId===c.opportunityId) : undefined;
+  const rolling= c.opportunityId ? (await (getMultiPeriodCapitalPlan(missionId) || optimizeMultiPeriodCapital(missionId))).allocations.find(a=>a.opportunityId===c.opportunityId) : undefined;
   const strategy=(c.action==="build"||c.action==="outreach"||c.action==="follow_up") ? await selectContextualStrategy(missionId,c.action,c.opportunityId,c.leadId) : null;
-  const job=await enqueueJob({kind:c.jobKind,missionId,opportunityId:c.opportunityId,leadId:c.leadId,payload:{decision:c.action,reason:c.reason,decisionId:memory.id,strategyExperimentId:strategy?.experimentId,strategyVariantId:joint?.strategyVariantId||strategy?.variant.id,strategyContext:strategy?.context,strategyRationale:strategy?.rationale,jointCapitalScore:joint?.jointScore,jointCapitalExploration:joint?.exploration},idempotencyKey:`decision:${missionId}:${c.action}:${c.opportunityId||"global"}`,maxAttempts:3,runAfter:new Date().toISOString()});
+  const job=await enqueueJob({kind:c.jobKind,missionId,opportunityId:c.opportunityId,leadId:c.leadId,payload:{decision:c.action,reason:c.reason,decisionId:memory.id,strategyExperimentId:strategy?.experimentId,strategyVariantId:rolling?.strategyVariantId||strategy?.variant.id,strategyContext:strategy?.context,strategyRationale:strategy?.rationale,rollingCapitalScore:rolling?.score,rollingCapitalPeriod:rolling?.period,rollingCapitalExploration:rolling?.exploration},idempotencyKey:`decision:${missionId}:${c.action}:${c.opportunityId||"global"}`,maxAttempts:3,runAfter:new Date().toISOString()});
   await attachDecisionJob(memory.id,job.id);
   return {...decision,decisionId:memory.id};
 }

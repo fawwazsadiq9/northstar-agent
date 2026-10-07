@@ -5,6 +5,7 @@ import { strategyPerformance } from "./strategy";
 import { selectContextualStrategy } from "./strategyOptimizer";
 import { scoreOpportunity } from "./economicOptimizer";
 import { getMultiPeriodCapitalPlan, optimizeMultiPeriodCapital } from "./multiPeriodCapital";
+import { replanMission } from "./closedLoop";
 
 export type DecisionAction = "discover"|"build"|"outreach"|"follow_up"|"measurement"|"recover"|"wait"|"approve";
 export interface DecisionCandidate { action:DecisionAction; score:number; reason:string; jobKind?:JobKind; opportunityId?:string; leadId?:string; requiresApproval?:boolean; }
@@ -15,6 +16,7 @@ function hasPendingJob(jobs:AgentJob[], missionId:string, kind:JobKind, opportun
 }
 
 export async function decideNextAction(missionId:string):Promise<Decision> {
+  await replanMission(missionId, "manual");
   const db=await readDB();
   const jobs=((db as typeof db & {jobs?:AgentJob[]}).jobs)||[];
   const nodes=((db as typeof db & {missionNodes?:Array<{id:string;missionId:string;kind:string;status:string;opportunityId?:string;approvalRequired?:boolean}>}).missionNodes)||[];

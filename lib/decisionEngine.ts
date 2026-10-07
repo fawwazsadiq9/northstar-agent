@@ -3,9 +3,7 @@ import { readDB } from "./store";
 import { recordDecision, attachDecisionJob, getDecisionLearning } from "./decisionMemory";
 import { strategyPerformance } from "./strategy";
 import { selectContextualStrategy } from "./strategyOptimizer";
-import { rankOpportunities, scoreOpportunity } from "./economicOptimizer";
-import { optimizeEconomicPortfolio } from "./portfolioOptimizer";
-import { getJointCapitalPlan } from "./jointCapitalOptimizer";
+import { scoreOpportunity } from "./economicOptimizer";
 import { getMultiPeriodCapitalPlan, optimizeMultiPeriodCapital } from "./multiPeriodCapital";
 
 export type DecisionAction = "discover"|"build"|"outreach"|"follow_up"|"measurement"|"recover"|"wait"|"approve";
@@ -53,10 +51,11 @@ export async function decideNextAction(missionId:string):Promise<Decision> {
 
   const withEmail=db.opportunities.filter(o=>o.contactEmail&&o.status==="qualified");
   if(withEmail.length&&!hasPendingJob(jobs,missionId,"outreach")) {
-    const economics=await Promise.all(withEmail.map(o=>scoreOpportunity(o.id)));
-    const bestEconomics=economics.sort((a,b)=>b.expectedCashVelocity-a.expectedCashVelocity)[0];
-    if(bestEconomics){
-      candidates.push({action:"outreach",score:Math.min(100,55+bestEconomics.economicScore*.45),reason:"Economic priority: "+bestEconomics.businessName+" — expected value $"+bestEconomics.expectedValue.toFixed(0)+", cash velocity $"+bestEconomics.expectedCashVelocity.toFixed(0)+"/day",jobKind:"outreach",opportunityId:bestEconomics.opportunityId,requiresApproval:true});
+    const rolling=await (getMultiPeriodCapitalPlan(missionId) || optimizeMultiPeriodCapital(missionId));
+    const ranked=rolling.allocations.filter(a=>withEmail.some(o=>o.id===a.opportunityId));
+    const best=ranked.sort((a,b)=>b.score-a.score)[0];
+    if(best){
+      candidates.push({action:"outreach",score:Math.min(100,55+best.score*.45),reason:"Rolling-horizon capital priority: "+best.businessName+" — expected value $"+best.expectedValue.toFixed(0)+", expected cash $"+best.expectedCash.toFixed(0)+", period "+best.period,jobKind:"outreach",opportunityId:best.opportunityId,requiresApproval:true});
     }
   }
 
